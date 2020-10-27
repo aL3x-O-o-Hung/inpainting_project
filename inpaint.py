@@ -6,6 +6,17 @@ import os
 from hpu_net import *
 
 def generate_free_form_mask(height,width,m1,m2,maxver=70,max_brush_width=30,maxlength=30):
+    '''
+    The function is to generate a free form mask given the height and weight of the image. the starting vertext must be in m1, and the mask won't go outside of m2
+    :param height:
+    :param width:
+    :param m1:
+    :param m2:
+    :param maxver:
+    :param max_brush_width:
+    :param maxlength:
+    :return:
+    '''
     mask=np.zeros((height,width,3))
     num_ver=np.random.randint(maxver//2,maxver)
     start_x=np.random.randint(0,height)
@@ -46,6 +57,13 @@ def generate_free_form_mask(height,width,m1,m2,maxver=70,max_brush_width=30,maxl
     return mask
 
 def generate_training(im,mask1,mask2):
+    '''
+    the function is to generate the training inputs
+    :param im:
+    :param mask1:
+    :param mask2:
+    :return:
+    '''
     mask=generate_free_form_mask(im.shape[0],im.shape[1],mask1,mask2)
     xx=np.argwhere(mask==1)
     res=np.zeros((im.shape[0],im.shape[1],7))
@@ -58,6 +76,11 @@ def generate_training(im,mask1,mask2):
     return res
 
 def get_faces(ind):
+    '''
+    the function is to get the mask of the faces to constraint the freeform mask
+    :param ind:
+    :return:
+    '''
     sind=str(ind)
     fold=ind//2000
     while len(sind)!=5:

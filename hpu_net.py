@@ -421,6 +421,17 @@ def training_loss(y_true,y_pred,model,rec,p,s,tv,w):
 
 class HierarchicalProbUNet(tf.keras.Model):
     def __init__(self,num_layers,num_filters,num_prior_layers,num_filters_prior,rec,p,s,tv,name=None):
+        '''
+        :param num_layers: an integer, number of layers in the encoder side
+        :param num_filters: a list, number of filters at each layer
+        :param num_prior_layers: an integer, number of layers with prior blocks
+        :param num_filters_prior: a list, number of filters at each prior blocks
+        :param rec: a float, weight of reconstruction loss
+        :param p: a list, weights of perceptual loss at each VGG layer
+        :param s: a list, weights of style loss at each VGG layer
+        :param tv: a float, weight of total variation loss
+        :param name:
+        '''
         super(HierarchicalProbUNet,self).__init__(name=name)
         self.num_layers=num_layers
         self.num_filters=num_filters
