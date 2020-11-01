@@ -419,6 +419,7 @@ def training_loss(y_true,y_pred,model,rec,p,s,tv,w):
 
 
 
+
 class HierarchicalProbUNet(tf.keras.Model):
     def __init__(self,num_layers,num_filters,num_prior_layers,num_filters_prior,rec,p,s,tv,name=None):
         '''
@@ -455,6 +456,40 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.p=p
         self.s=s
         self.tv=tv
+        self.upsamp=tf.keras.layers.UpSampling2D()
+        #self.downsamp=tf.keras.layers.MaxPooling2D()
+        self.downsamp=tf.keras.layers.AveragePooling2D()
+    def get_gaussian_pyramid(self,mask,l):
+        masks=[mask]
+        for i in range(l-1):
+            mask=tfa.image.gaussian_filter2d(mask)
+            mask=self.downsamp(mask)
+            #mask=tf.image.resize(mask,[mask.get_shape().as_list()[1]//2,mask.get_shape().as_list()[2]//2],tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+            masks.append(mask)
+        masks=masks[::-1]
+        return masks
+
+    def get_laplacian_pyramid(self,p):
+        py=[]
+        for i in range(len(p)):
+            if i==0:
+                py.append(p[i])
+            else:
+                py.append(p[i]-tfa.image.gaussian_filter2d(self.upsamp(p[i-1])))
+        return py
+
+
+
+    def build_from_pyramid(self,lp_input,lp_result,masks):
+        final_res=[]
+        for i in range(len(lp_input)):
+            if i==0:
+                final_res.append(lp_result[i]*masks[i]+lp_input[i]*(1-masks[i]))
+            else:
+                final_res.append(lp_result[i]*masks[i]+lp_input[i]*(1-masks[i])+tfa.image.gaussian_filter2d(self.upsamp(final_res[i-1])))
+                #final_res.append(lp_result[i]*masks[i]+lp_input[i]*(1-masks[i])+tfa.image.gaussian_filter2d(tf.image.resize(final_res[i-1],[final_res[i-1].get_shape().as_list()[1]*2,final_res[i-1].get_shape().as_list()[2]*2])))
+        #return final_res[len(lp_input)-1]
+        return final_res[len(lp_input)-1]
 
     def reconstruction_loss(self,y_true,y_pred):
         loss=K.square(y_true-y_pred)
@@ -528,6 +563,12 @@ class HierarchicalProbUNet(tf.keras.Model):
         x1,prior1=self.decoder(x1,b_list1,prob,is_training=is_training)
         x1=self.conv(x1)
         x1=tf.keras.activations.sigmoid(x1)
+        masks=self.get_gaussian_pyramid(mask,4)
+        res_gaus=self.get_gaussian_pyramid(x1,4)
+        inp_gaus=self.get_gaussian_pyramid(inputs[:,:,:,0:3],4)
+        res_=self.get_laplacian_pyramid(res_gaus)
+        inp_=self.get_laplacian_pyramid(inp_gaus)
+        x1=self.build_from_pyramid(inp_,res_,masks)
         '''
         res=[]
         for i in range(len(xs)):
@@ -561,6 +602,13 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list.reverse()
         x1=self.decoder.sample(x,b_list,is_training=is_training)
         x1=self.conv(x1)
+        mask=inputs[:,:,:,3:4]
         x1=tf.keras.activations.sigmoid(x1)
+        masks=self.get_gaussian_pyramid(mask,4)
+        res_gaus=self.get_gaussian_pyramid(x1,4)
+        inp_gaus=self.get_gaussian_pyramid(inputs[:,:,:,0:3],4)
+        res_=self.get_laplacian_pyramid(res_gaus)
+        inp_=self.get_laplacian_pyramid(inp_gaus)
+        x1=self.build_from_pyramid(inp_,res_,masks)
         return x1
 
