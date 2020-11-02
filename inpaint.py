@@ -5,6 +5,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import torch
 from hpu_lap import HierarchicalProbUNet
 
 data_dir = "../data/CelebAMask-HQ"
@@ -142,30 +143,57 @@ def load_data_celeb(lis, t='train'):
     return np.array(x)
 
 
+class CeleTrainDataset(torch.utils.data.Dataset):
+    def __init__(self):
+        self.len = 27000
+
+    def __getitem__(self, index):
+        im = cv2.imread(os.path.join(data_dir, 'CelebA-HQ-img', str(index) + '.jpg'))
+        mask1, mask2 = get_faces(index)
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        im = cv2.resize(im, (256, 256))
+        im = im / 255.0
+        im = generate_training(im, mask1, mask2)
+        return im
+
+    def __len__(self):
+        return self.len
+
+
 def train():
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 30
     out = '../output/naive_inpaint/'
-    model = HierarchicalProbUNet(
-        num_layers=6,
-        num_filters=[64, 128, 256, 512, 1024, 2048],
-        num_prior_layers=3,
-        num_filters_prior=[4, 8, 16, 32],
-        rec=1,
-        p=[0.1, 0.1, 0, 0, 0],
-        s=[0, 0, 0.02, 3, 3],
-        tv=0,
-        name='ProbUNet'
-    )
-    model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        model = HierarchicalProbUNet(
+            num_layers=6,
+            num_filters=[64, 128, 256, 512, 1024, 2048],
+            num_prior_layers=3,
+            num_filters_prior=[4, 8, 16, 32],
+            rec=1,
+            p=[0.01, 0.01, 0.01, 0.01, 0.01],
+            s=[0.2, 0.2, 0.2, 0.2, 0.2],
+            tv=0,
+            name='ProbUNet',
+        )
+        model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
+
+    train_dataset = CeleTrainDataset()
+    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=8)
+
     for epoch in range(epochs):
-        lis = []
-        for i in range(27000):
-            lis.append(i)
-        while len(lis) != 0:
-            print(epoch, len(lis))
-            x = load_data_celeb(lis)
+        # lis = []
+        # for i in range(27000):
+        #     lis.append(i)
+        # while len(lis) != 0:
+        #     print(epoch, len(lis))
+        #     x = load_data_celeb(lis)
+        #     model.fit(x, x, epochs=1, batch_size=16)
+        for c, x in enumerate(data_loader):
+            print("epoch", epoch, ",", c, "/", 27000//400)
+            x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=16)
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
@@ -181,10 +209,10 @@ def continue_train(num):
         num_prior_layers=3,
         num_filters_prior=[4, 8, 16, 32],
         rec=1,
-        p=[0.1, 0.1, 0.02, 0.01, 0.01],
-        s=[0.1, 0.1, 0.5, 0.1, 1.5],
+        p=[0.01, 0.01, 0.01, 0.01, 0.01],
+        s=[0.2, 0.2, 0.2, 0.2, 0.2],
         tv=0,
-        name='ProbUNet'
+        name='ProbUNet',
     )
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
@@ -212,10 +240,10 @@ def evaluation(num):
         num_prior_layers=3,
         num_filters_prior=[4, 8, 16, 32],
         rec=1,
-        p=[0.3, 0.3, 0.2, 0.1, 0.1],
-        s=[0.1, 0.1, 0.2, 0.3, 0.3],
+        p=[0.01, 0.01, 0.01, 0.01, 0.01],
+        s=[0.2, 0.2, 0.2, 0.2, 0.2],
         tv=0.0001,
-        name='ProbUNet'
+        name='ProbUNet',
     )
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
@@ -226,7 +254,7 @@ def evaluation(num):
     while len(lis) != 0:
         x = load_data_celeb(lis, 'valid')
         # y=model.sample(x[0:1,:,:,0:4],is_training=False)
-        y = model.sample(x[0:1, :, :, 0:4], is_training=False)
+        # y = model.sample(x[0:1, :, :, 0:4], is_training=False)
 
         '''
         plt.subplot(2,3,1)
