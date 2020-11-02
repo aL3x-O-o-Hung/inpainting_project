@@ -3,7 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
-from hpu_net_temp import *
+from hpu_lap import *
 
 def generate_free_form_mask(height,width,m1,m2,maxver=70,max_brush_width=30,maxlength=30):
     '''
@@ -152,7 +152,7 @@ def continue_train(num):
     print("Num GPUs Available: ",len(tf.config.experimental.list_physical_devices('GPU')))
     epochs=50
     out='naive_inpaint/'
-    model=HierarchicalProbUNet(6,[64,128,256,512,1024,2048],3,[4,8,16,32],1,[0.3,0.3,0.2,0.1,0.1],[0.1,0.1,0.2,0.3,0.3],0.0001,name='ProbUNet')
+    model=HierarchicalProbUNet(6,[64,128,256,512,1024,2048],3,[4,8,16,32],1,[0.1,0.1,0.02,0.01,0.01],[0.1,0.1,0.5,0.1,1.5],0,name='ProbUNet')
     inputs=tf.keras.Input(shape=(256,256,7,))
     model(inputs)
     model.load_weights(out+str(num)+'.h5',by_name=True,skip_mismatch=True)
@@ -171,12 +171,13 @@ def evaluation(num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ",len(tf.config.experimental.list_physical_devices('GPU')))
     out='naive_inpaint/'
+    #hpu hpu_temp
     model=HierarchicalProbUNet(6,[64,128,256,512,1024,2048],3,[4,8,16,32],1,[0.3,0.3,0.2,0.1,0.1],[0.1,0.1,0.2,0.3,0.3],0.0001,name='ProbUNet')
     inputs=tf.keras.Input(shape=(256,256,7,))
     model(inputs)
     model.load_weights(out+str(num)+'.h5',by_name=True,skip_mismatch=True)
     lis=[]
-    for i in range(27000):
+    for i in range(27000,30000):
         lis.append(i)
     while len(lis)!=0:
         x=load_data_celeb(lis,'valid')
@@ -199,14 +200,18 @@ def evaluation(num):
         plt.show()
         '''
 
-        plt.subplot(1,2,1)
+        plt.subplot(4,2,1)
         plt.imshow(x[0,:,:,0:3])
-        plt.subplot(1,2,2)
-        plt.imshow(y[0,:,:,:])
+        plt.subplot(4,2,2)
+        plt.imshow(x[0,:,:,4:7])
+        for i in range(6):
+            y=model.sample(x[0:1,:,:,0:4],is_training=False)
+            plt.subplot(4,2,i+3)
+            plt.imshow(y[0,:,:,:])
         plt.show()
 
-evaluation(27)
-#continue_train(23)
+evaluation(49)
+#continue_train(42)
 
 
 
