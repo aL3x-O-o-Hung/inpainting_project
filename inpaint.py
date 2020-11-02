@@ -203,28 +203,39 @@ def continue_train(num):
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 50
     out = '../output/naive_inpaint/'
-    model = HierarchicalProbUNet(
-        num_layers=6,
-        num_filters=[64, 128, 256, 512, 1024, 2048],
-        num_prior_layers=3,
-        num_filters_prior=[4, 8, 16, 32],
-        rec=1,
-        p=[0.01, 0.01, 0.01, 0.01, 0.01],
-        s=[0.2, 0.2, 0.2, 0.2, 0.2],
-        tv=0,
-        name='ProbUNet',
-    )
-    inputs = tf.keras.Input(shape=(256, 256, 7,))
-    model(inputs)
-    model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
-    model.compile()
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        model = HierarchicalProbUNet(
+            num_layers=6,
+            num_filters=[64, 128, 256, 512, 1024, 2048],
+            num_prior_layers=3,
+            num_filters_prior=[4, 8, 16, 32],
+            rec=1,
+            p=[0.01, 0.01, 0.01, 0.01, 0.01],
+            s=[0.2, 0.2, 0.2, 0.2, 0.2],
+            tv=0,
+            name='ProbUNet',
+        )
+        inputs = tf.keras.Input(shape=(256, 256, 7,))
+        model(inputs)
+        model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
+        model.compile()
+
+    train_dataset = CeleTrainDataset()
+    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=8)
+
     for epoch in range(num + 1, epochs):
-        lis = []
-        for i in range(27000):
-            lis.append(i)
-        while len(lis) != 0:
-            print(epoch, len(lis))
-            x = load_data_celeb(lis)
+        # lis = []
+        # for i in range(27000):
+        #     lis.append(i)
+        # while len(lis) != 0:
+        #     print(epoch, len(lis))
+        #     x = load_data_celeb(lis)
+        #     model.fit(x, x, epochs=1, batch_size=16)
+        # model.save_weights(out + str(epoch) + '.h5', save_format='h5')
+        for c, x in enumerate(data_loader):
+            print("epoch", epoch, ",", c, "/", 27000//400)
+            x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=16)
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
