@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import tensorflow as tf
-from hpu_lap import *
+from .hpu_lap import *
 
 
 def generate_free_form_mask(height, width, m1, m2, maxver=70, max_brush_width=30, maxlength=30):
@@ -224,5 +224,6 @@ def evaluation(num):
         plt.show()
 
 
-evaluation(49)
-# continue_train(42)
+if __name__ == "__main__":
+    evaluation(49)
+    # continue_train(42)
