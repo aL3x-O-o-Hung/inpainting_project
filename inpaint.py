@@ -1,8 +1,14 @@
 import argparse
 import os
-from .hpu_lap import *
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+from hpu_lap import HierarchicalProbUNet
 
 data_dir = "../data/CelebAMask-HQ"
+
 
 def generate_free_form_mask(height, width, m1, m2, maxver=70, max_brush_width=30, maxlength=30):
     '''
@@ -99,7 +105,7 @@ def get_faces(ind):
                 c += 1
             else:
                 mask += cv2.resize(cv2.imread(
-                    os.path.join(data_dir, 'CelebAMask-HQ-mask-anno',+ str(fold) + '/' + sind + '_' + name + '.png')),
+                    os.path.join(data_dir, 'CelebAMask-HQ-mask-anno', str(fold) + '/' + sind + '_' + name + '.png')),
                     (256, 256))
     mask = (mask > 0).astype(np.float)
     m1 = (m1 > 0).astype(np.float)
