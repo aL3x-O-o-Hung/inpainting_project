@@ -551,9 +551,9 @@ class HierarchicalProbUNet(tf.keras.Model):
         return loss
 
     def total_loss(self, y_true, y_pred, model, rec, p, s, tv):
-        return rec * self.reconstruction_loss(y_true, y_pred) + self.deep_loss(y_true, y_pred, model, p,
-                                                                               s) + tv * self.total_variation_loss(
-            y_pred)
+        return (rec * self.reconstruction_loss(y_true, y_pred)
+                + self.deep_loss(y_true, y_pred, model, p, s)
+                + tv * self.total_variation_loss(y_pred))
 
     def training_loss(self, y_true, y_pred, model, rec, p, s, tv):
         loss = self.total_loss(y_true, y_pred, model, rec, p, s, tv)
