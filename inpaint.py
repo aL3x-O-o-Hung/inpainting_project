@@ -1,10 +1,8 @@
-import cv2
-import matplotlib.pyplot as plt
-import numpy as np
+import argparse
 import os
-import tensorflow as tf
 from .hpu_lap import *
 
+data_dir = "../data/CelebAMask-HQ"
 
 def generate_free_form_mask(height, width, m1, m2, maxver=70, max_brush_width=30, maxlength=30):
     '''
@@ -91,18 +89,18 @@ def get_faces(ind):
     names = ['skin', 'cloth', 'hair', 'neck']
     c = 0
     for name in names:
-        if os.path.exists(
-            '../data/CelebAMask-HQ/CelebAMask-HQ-mask-anno/' + str(fold) + '/' + sind + '_' + name + '.png'):
+        if os.path.exists(os.path.join(data_dir, 'CelebAMask-HQ-mask-anno',
+                                       str(fold) + '/' + sind + '_' + name + '.png')):
             if c == 0:
                 mask = cv2.resize(cv2.imread(
-                    '../data/CelebAMask-HQ/CelebAMask-HQ-mask-anno/' + str(fold) + '/' + sind + '_' + name + '.png'),
-                                  (256, 256))
+                    os.path.join(data_dir, 'CelebAMask-HQ-mask-anno', str(fold) + '/' + sind + '_' + name + '.png')),
+                    (256, 256))
                 m1 = mask.copy()
                 c += 1
             else:
                 mask += cv2.resize(cv2.imread(
-                    '../data/CelebAMask-HQ/CelebAMask-HQ-mask-anno/' + str(fold) + '/' + sind + '_' + name + '.png'),
-                                   (256, 256))
+                    os.path.join(data_dir, 'CelebAMask-HQ-mask-anno',+ str(fold) + '/' + sind + '_' + name + '.png')),
+                    (256, 256))
     mask = (mask > 0).astype(np.float)
     m1 = (m1 > 0).astype(np.float)
     mask = mask[:, :, 0]
@@ -128,7 +126,7 @@ def load_data_celeb(lis, t='train'):
             while ind not in lis:
                 ind = np.random.randint(lb, hb)
             lis.remove(ind)
-            im = cv2.imread('../data/CelebAMask-HQ/CelebA-HQ-img/' + str(ind) + '.jpg')
+            im = cv2.imread(os.path.join(data_dir, 'CelebA-HQ-img', str(ind) + '.jpg'))
             mask1, mask2 = get_faces(ind)
             im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
             im = cv2.resize(im, (256, 256))
@@ -142,9 +140,18 @@ def train():
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 30
-    out = 'naive_inpaint/'
-    model = HierarchicalProbUNet(6, [64, 128, 256, 512, 1024, 2048], 3, [4, 8, 16, 32], 1, [0.1, 0.1, 0, 0, 0],
-                                 [0, 0, 0.02, 3, 3], 0, name='ProbUNet')
+    out = '../output/naive_inpaint/'
+    model = HierarchicalProbUNet(
+        num_layers=6,
+        num_filters=[64, 128, 256, 512, 1024, 2048],
+        num_prior_layers=3,
+        num_filters_prior=[4, 8, 16, 32],
+        rec=1,
+        p=[0.1, 0.1, 0, 0, 0],
+        s=[0, 0, 0.02, 3, 3],
+        tv=0,
+        name='ProbUNet'
+    )
     model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
     for epoch in range(epochs):
         lis = []
@@ -161,9 +168,18 @@ def continue_train(num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 50
-    out = 'naive_inpaint/'
-    model = HierarchicalProbUNet(6, [64, 128, 256, 512, 1024, 2048], 3, [4, 8, 16, 32], 1, [0.1, 0.1, 0.02, 0.01, 0.01],
-                                 [0.1, 0.1, 0.5, 0.1, 1.5], 0, name='ProbUNet')
+    out = '../output/naive_inpaint/'
+    model = HierarchicalProbUNet(
+        num_layers=6,
+        num_filters=[64, 128, 256, 512, 1024, 2048],
+        num_prior_layers=3,
+        num_filters_prior=[4, 8, 16, 32],
+        rec=1,
+        p=[0.1, 0.1, 0.02, 0.01, 0.01],
+        s=[0.1, 0.1, 0.5, 0.1, 1.5],
+        tv=0,
+        name='ProbUNet'
+    )
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
     model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
@@ -182,10 +198,19 @@ def continue_train(num):
 def evaluation(num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
-    out = 'naive_inpaint/'
+    out = '../output/naive_inpaint/'
     # hpu hpu_temp
-    model = HierarchicalProbUNet(6, [64, 128, 256, 512, 1024, 2048], 3, [4, 8, 16, 32], 1, [0.3, 0.3, 0.2, 0.1, 0.1],
-                                 [0.1, 0.1, 0.2, 0.3, 0.3], 0.0001, name='ProbUNet')
+    model = HierarchicalProbUNet(
+        num_layers=6,
+        num_filters=[64, 128, 256, 512, 1024, 2048],
+        num_prior_layers=3,
+        num_filters_prior=[4, 8, 16, 32],
+        rec=1,
+        p=[0.3, 0.3, 0.2, 0.1, 0.1],
+        s=[0.1, 0.1, 0.2, 0.3, 0.3],
+        tv=0.0001,
+        name='ProbUNet'
+    )
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
     model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
@@ -225,5 +250,16 @@ def evaluation(num):
 
 
 if __name__ == "__main__":
-    evaluation(49)
-    # continue_train(42)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', type=str)
+    parser.add_argument('--start_epoch', type=int, default=0)
+    args = parser.parse_args()
+
+    if args.mode == "train":
+        train()
+    elif args.mode == "eval":
+        evaluation(args.start_epoch)
+    elif args.mode == "continue_train":
+        continue_train(args.start_epoch)
+    else:
+        raise NotImplementedError
