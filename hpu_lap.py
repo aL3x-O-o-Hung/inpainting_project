@@ -423,7 +423,6 @@ class HierarchicalProbUNet(tf.keras.Model):
             else:
                 temp_loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
                 loss += tf.reduce_mean(temp_loss)
-        # loss = loss / (2 ** l - 1)
         temp_loss = 0.5 * (4 ** (l - 1)) * K.square(y_true - y_pred)
         loss += tf.reduce_mean(temp_loss)
         loss = weight * loss

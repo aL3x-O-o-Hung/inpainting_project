@@ -166,9 +166,9 @@ def my_model():
         num_filters=[64, 128, 256, 512, 1024],
         num_prior_layers=2,
         num_filters_prior=[10, 10],
-        rec=10.0,
-        p=[0, 0, 0, 0.00001, 0],
-        s=[0, 0, 0, 0.001, 0],
+        rec=1.0,
+        p=[0, 0, 0, 0.000001, 0],
+        s=[0, 0, 0, 0.0001, 0],
         tv=0,
         name='ProbUNet',
     )
