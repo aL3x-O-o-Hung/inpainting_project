@@ -166,6 +166,7 @@ def my_model():
         num_filters=[64, 128, 256, 512, 1024, 1024, 1024],
         num_prior_layers=4,
         num_filters_prior=[80, 40, 20, 10],
+        # 4 x 4, 8 x 8, 16 x 16, 32 x 32
         rec=1.0,
         p=[0, 0, 0, 0.00005, 0],
         s=[0, 0, 0, 0.005, 0],
