@@ -145,7 +145,7 @@ class PriorBlock(tf.keras.layers.Layer):
         mean = x[:, :, :, :s // 2]
         # mean =tf.keras.activations.tanh(mean)
         logvar = x[:, :, :, s // 2:]
-        std = 0.1 + 10.0 * tf.keras.activations.sigmoid(logvar)
+        std = 0.2 + 5.0 * tf.keras.activations.sigmoid(logvar)
         # var = K.exp(logvar)
         # var = K.abs(logvar)
         return tf.concat([mean, std], axis=-1)
@@ -259,7 +259,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
                 prior[i][:, :, :, s // 2:] * posterior[i][:, :, :, s // 2:],
             ], axis=-1)
             prob = self.prob_function(true_posterior)
-            x = tf.concat([x, prob[i]], axis=-1)
+            x = tf.concat([x, prob], axis=-1)
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
         return x, prior
 
