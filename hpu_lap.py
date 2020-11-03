@@ -19,14 +19,14 @@ class BatchNormRelu(tf.keras.layers.Layer):
 
     def __init__(self, name=None, dtype=None):
         super(BatchNormRelu, self).__init__(name=name)
-        self.bnorm = tf.keras.layers.BatchNormalization(momentum=0.999,
-                                                        scale=False,
+        self.bnorm = tf.keras.layers.BatchNormalization(momentum=0.9,
+                                                        renorm=True,
+                                                        renorm_momentum=0.9,
                                                         dtype=dtype)
-        self.relu = tf.keras.layers.ReLU(dtype=dtype)
 
     def call(self, inputs, is_training):
         x = self.bnorm(inputs, training=is_training)
-        x = self.relu(x)
+        x = tf.keras.activations.swish(x)
         return x
 
 
@@ -40,7 +40,7 @@ class Conv2DTranspose(tf.keras.layers.Layer):
             kernel_size=kernel_size,
             strides=2,
             padding='same',
-            activation=tf.keras.activations.relu,
+            activation=tf.keras.activations.swish,
             dtype=dtype
         )
 
@@ -103,7 +103,8 @@ class DeConvBlock(tf.keras.layers.Layer):
 
     def __init__(self, filters, kernel_size=2, name=None):
         super(DeConvBlock, self).__init__(name=name)
-        self.tconv1 = Conv2DTranspose(output_channels=filters, kernel_size=kernel_size)
+        self.tconv1 = Conv2DTranspose(output_channels=filters,
+                                      kernel_size=kernel_size)
         self.conv1 = Conv2DFixedPadding(filters=filters,
                                         kernel_size=3,
                                         stride=1)
@@ -146,7 +147,7 @@ class PriorBlock(tf.keras.layers.Layer):
         mean = x[:, :, :, 0:s // 2]
         mean = tf.keras.activations.tanh(mean)
         logvar = x[:, :, :, s // 2:]
-        logvar = tf.keras.activations.sigmoid(logvar)
+        # logvar = tf.keras.activations.sigmoid(logvar)
         var = K.exp(logvar)
         # var=K.abs(logvar)
         return tf.concat([mean, var], axis=-1)
@@ -158,8 +159,6 @@ def prob_function(inputs):
     s[3] = int(s[3] / 2)
     dist = tfp.distributions.Normal(loc=0.0, scale=1.0)
     samp = dist.sample([1, s[1], s[2], s[3]])
-    # g=tf.random.Generator.from_seed(1234)
-    # dis=g.normal(shape=s)
     dis = tf.math.multiply(samp, inputs[:, :, :, s[3]:])
     dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
     return dis
@@ -174,9 +173,7 @@ class Prob(tf.keras.layers.Layer):
         s[3] = int(s[3] / 2)
         dist = tfp.distributions.Normal(loc=0.0, scale=1.0)
         samp = dist.sample([1, s[1], s[2], s[3]])
-        # g=tf.random.Generator.from_seed(1234)
-        # dis=g.normal(shape=s)
-        dis = tf.math.multiply(samp, K.sqrt(inputs[:, :, :, s[3]:]))
+        dis = tf.math.multiply(samp, inputs[:, :, :, s[3]:])
         dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
         return dis
 
@@ -187,8 +184,6 @@ class Encoder(tf.keras.layers.Layer):
     def __init__(self, num_layers, num_filters, name=None):
         super(Encoder, self).__init__(name=name)
         self.convs = []
-
-        self.prob_function = Prob
         for i in range(num_layers):
             if i < num_layers - 1:
                 conv_temp = ConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
@@ -215,7 +210,6 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         self.num_filters_prior = num_filters_prior
         self.deconvs = []
         self.priors = []
-        #
         self.prob_function = Prob()
         for i in range(num_layers):
             self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
@@ -228,7 +222,6 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         for i in range(self.num_layers):
             p = self.priors[i](x)
             prior.append(p)
-            # p=prob_function(p)
             p = self.prob_function(p)
             prob.append(p)
             if i != self.num_layers - 1:
@@ -247,7 +240,6 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
         self.num_filters_prior = num_filters_prior
         self.deconvs = []
         self.priors = []
-        #
         self.prob_function = Prob()
         for i in range(num_layers):
             self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
@@ -266,7 +258,6 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
     def sample(self, x, blocks, is_training=False):
         for i in range(self.num_layers):
             p = self.priors[i](x)
-            # prob=prob_function(p)
             prob = prob_function(p)
             x = tf.concat([x, prob], axis=-1)
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
@@ -291,7 +282,9 @@ class Decoder(tf.keras.layers.Layer):
         self.num_filters = num_filters
         self.num_filters_in_prior = num_filters_in_prior
         self.num_prior_layers = num_prior_layers
-        self.prior_decode = DecoderWithPriorBlock(num_prior_layers, num_filters_in_prior, num_filters_prior,
+        self.prior_decode = DecoderWithPriorBlock(num_prior_layers,
+                                                  num_filters_in_prior,
+                                                  num_filters_prior,
                                                   name=name + '_with_prior')
         self.tconvs = []
         self.generate = []
@@ -306,7 +299,6 @@ class Decoder(tf.keras.layers.Layer):
         return x, prior
 
     def sample(self, x, b, is_training=False):
-        ########
         x = self.prior_decode.sample(x, b[0:self.num_prior_layers], is_training=is_training)
         for i in range(self.num_layers):
             x = self.tconvs[i](x, b[self.num_prior_layers + i], is_training=is_training)
@@ -346,15 +338,22 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.num_prior_layers = num_prior_layers
         self.num_filters_decoder = num_filters[::-1]
         self.num_filters_prior = num_filters_prior
-        self.encoder = Encoder(num_layers, num_filters, name=name + '_encoder')
-        self.encoder_post = Encoder(num_layers, num_filters, name=name + '_encoder_post')
-        self.decoder = Decoder(num_layers - num_prior_layers - 1, num_prior_layers,
-                               self.num_filters_decoder[num_prior_layers + 1:],
-                               self.num_filters_decoder[1:num_prior_layers + 1], num_filters_prior,
+        self.encoder = Encoder(num_layers,
+                               num_filters,
+                               name=name + '_encoder')
+        self.encoder_post = Encoder(num_layers,
+                                    num_filters,
+                                    name=name + '_encoder_post')
+        self.decoder = Decoder(num_layers=num_layers - num_prior_layers - 1,
+                               num_prior_layers=num_prior_layers,
+                               num_filters=self.num_filters_decoder[num_prior_layers + 1:],
+                               num_filters_in_prior=self.num_filters_decoder[1:num_prior_layers + 1],
+                               num_filters_prior=num_filters_prior,
                                name=name + '_decoder')
         self.decoder_post = DecoderWithPriorBlockPosterior(num_prior_layers,
                                                            self.num_filters_decoder[1:num_prior_layers + 1],
-                                                           num_filters_prior, name=name + '_decoder_post')
+                                                           num_filters_prior,
+                                                           name=name + '_decoder_post')
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
         self.VGG = VGG16()
         self.VGGs = []
@@ -369,7 +368,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.s = s
         self.tv = tv
         self.upsamp = tf.keras.layers.UpSampling2D()
-        # self.downsamp=tf.keras.layers.MaxPooling2D()
         self.downsamp = tf.keras.layers.AveragePooling2D()
 
     def get_gaussian_pyramid(self, mask, l):
@@ -377,7 +375,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         for i in range(l - 1):
             mask = tfa.image.gaussian_filter2d(mask)
             mask = self.downsamp(mask)
-            # mask=tf.image.resize(mask,[mask.get_shape().as_list()[1]//2,mask.get_shape().as_list()[2]//2],tf.image.ResizeMethod.NEAREST_NEIGHBOR)
             masks.append(mask)
         masks = masks[::-1]
         return masks
@@ -452,9 +449,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         y_pred = preprocess_input(y_pred * 255)
         loss = 0
         for i in range(len(model)):
-            y_true_ = model[i](y_true)
-            y_pred_ = model[i](y_pred)
-            loss += p[i] * self.perceptual_loss(y_true_, y_pred_, i) + s[i] * self.style_loss(y_true_, y_pred_, i)
+            if p[i] > 0 or s[i] > 0:
+                y_true_ = model[i](y_true)
+                y_pred_ = model[i](y_pred)
+                loss += p[i] * self.perceptual_loss(y_true_, y_pred_, i) + s[i] * self.style_loss(y_true_, y_pred_, i)
         return loss
 
     def total_variation_loss(self, y_pred):
@@ -463,9 +461,12 @@ class HierarchicalProbUNet(tf.keras.Model):
         return loss
 
     def total_loss(self, y_true, y_pred, model, rec, p, s, tv):
-        return (rec * self.reconstruction_loss(y_true, y_pred)
-                + self.deep_loss(y_true, y_pred, model, p, s)
-                + tv * self.total_variation_loss(y_pred))
+        loss = self.deep_loss(y_true, y_pred, model, p, s)
+        if rec != 0:
+            loss += rec * self.reconstruction_loss(y_true, y_pred)
+        if tv > 0:
+            loss += tv * self.total_variation_loss(y_pred)
+        return loss
 
     def training_loss(self, y_true, y_pred, model, rec, p, s, tv):
         loss = self.total_loss(y_true, y_pred, model, rec, p, s, tv)
@@ -474,7 +475,7 @@ class HierarchicalProbUNet(tf.keras.Model):
     def call(self, inputs, is_training=True):
         x1 = inputs[:, :, :, 0:3]
         x2 = inputs[:, :, :, 4:7]
-        t = x2
+        ground_truth_x = x2
         mask = inputs[:, :, :, 3:4]
         x1 = tf.concat((x1, mask), axis=-1)
         x2 = tf.concat((x2, mask), axis=-1)
@@ -495,21 +496,13 @@ class HierarchicalProbUNet(tf.keras.Model):
         inp_ = self.get_laplacian_pyramid(inp_gaus)
         x1 = self.build_from_pyramid(inp_, res_, masks)
 
-        loss = self.training_loss(t, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
+        loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior1)):
             if i == 0:
-                # los=kl(prior2[i],prior1[i])
-                # los=K.flatten(los)
-                # los=tf.reduce_mean(los)
                 los = kl_gauss(prior2[i], prior1[i])
-            # los=tf.keras.backend.sum(los,kl(prior2[i],prior1[i]))
             else:
-                # temp=kl(prior2[i],prior1[i])
                 temp = kl_gauss(prior2[i], prior1[i])
-                # temp=K.flatten(temp)
-                # temp=tf.reduce_mean(temp)
                 los = math_ops.add(los, temp)
-
         self.add_loss(loss + los)
         return x1
 

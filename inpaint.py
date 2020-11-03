@@ -170,11 +170,11 @@ def train():
         model = HierarchicalProbUNet(
             num_layers=6,
             num_filters=[64, 128, 256, 512, 1024, 2048],
-            num_prior_layers=3,
-            num_filters_prior=[4, 8, 16, 32],
+            num_prior_layers=5,
+            num_filters_prior=[20, 20, 20, 20, 20],
             rec=1,
             p=[0.01, 0.01, 0.01, 0.01, 0.01],
-            s=[0.2, 0.2, 0.2, 0.2, 0.2],
+            s=[0.1, 0.1, 0.1, 0.1, 0.1],
             tv=0,
             name='ProbUNet',
         )
@@ -208,11 +208,11 @@ def continue_train(num):
         model = HierarchicalProbUNet(
             num_layers=6,
             num_filters=[64, 128, 256, 512, 1024, 2048],
-            num_prior_layers=3,
-            num_filters_prior=[4, 8, 16, 32],
+            num_prior_layers=5,
+            num_filters_prior=[20, 20, 20, 20, 20],
             rec=1,
             p=[0.01, 0.01, 0.01, 0.01, 0.01],
-            s=[0.2, 0.2, 0.2, 0.2, 0.2],
+            s=[0.1, 0.1, 0.1, 0.1, 0.1],
             tv=0,
             name='ProbUNet',
         )
@@ -248,12 +248,12 @@ def evaluation(num):
     model = HierarchicalProbUNet(
         num_layers=6,
         num_filters=[64, 128, 256, 512, 1024, 2048],
-        num_prior_layers=3,
-        num_filters_prior=[4, 8, 16, 32],
+        num_prior_layers=5,
+        num_filters_prior=[20, 20, 20, 20, 20],
         rec=1,
         p=[0.01, 0.01, 0.01, 0.01, 0.01],
-        s=[0.2, 0.2, 0.2, 0.2, 0.2],
-        tv=0.0001,
+        s=[0.1, 0.1, 0.1, 0.1, 0.1],
+        tv=0,
         name='ProbUNet',
     )
     inputs = tf.keras.Input(shape=(256, 256, 7,))
@@ -308,3 +308,15 @@ if __name__ == "__main__":
         continue_train(args.start_epoch)
     else:
         raise NotImplementedError
+
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+      try:
+        # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+          tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+      except RuntimeError as e:
+        # Memory growth must be set before GPUs have been initialized
+        print(e)
