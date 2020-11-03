@@ -327,87 +327,6 @@ def kl_gauss(y_true, y_pred):
     return loss
 
 
-'''
-def kl_gauss(y_true,y_pred):
-    s=y_true.get_shape().as_list()[3]
-    mean_true=y_true[:,:,:,0:s//2]
-    var_true=y_true[:,:,:,s//2:]
-    mean_pred=y_pred[:,:,:,0:s//2]
-    var_pred=y_pred[:,:,:,s//2:]
-    first=var_pred-var_true
-    second=math_ops.divide(K.exp(var_true)+K.square(mean_true-mean_pred),K.exp(var_pred))
-    loss=first+second-1
-    loss=K.flatten(loss*0.5)
-    loss=tf.reduce_mean(loss)
-    return loss
-
-
-
-
-def kl_gauss(y_true,y_pred):
-    loss=K.square(y_true-y_pred)
-    loss=K.flatten(loss)
-    loss=tf.reduce_mean(loss)
-    return loss
-
-'''
-
-'''
-def reconstruction_loss(y_true,y_pred):
-    loss=K.square(y_true-y_pred)
-    loss=tf.reduce_mean(loss)
-    return loss
-
-def perceptual_loss(y_true,y_pred):
-    loss=K.square((y_true-y_pred)/255)
-    return tf.reduce_mean(loss)
-
-def gram_matrix(x):
-    x=K.permute_dimensions(x,(0,3,1,2))
-    shape=K.shape(x)
-    B,C,H,W=shape[0],shape[1],shape[2],shape[3]
-    features=K.reshape(x,K.stack([B,C,H*W]))
-    gram=K.batch_dot(features,features,axes=2)
-    denominator=C*H*W
-    gram=gram/K.cast(denominator,x.dtype)
-    return gram
-
-def style_loss(y_true,y_pred):
-    y_true=gram_matrix(y_true)
-    y_pred=gram_matrix(y_pred)
-    loss=K.square((y_true-y_pred)/255.0)
-    return tf.reduce_mean(loss)
-
-def deep_loss(y_true,y_pred,model,p,s):
-    y_true=tf.image.resize(y_true,[224,224])
-    y_true=preprocess_input(y_true*255)
-    y_pred=tf.image.resize(y_pred,[224,224])
-    y_pred=preprocess_input(y_pred*255)
-    loss=0
-    for i in range(len(model)):
-        y_true_=model[i](y_true)
-        y_pred_=model[i](y_pred)
-        loss+=p[i]*perceptual_loss(y_true_,y_pred_)+s[i]*style_loss(y_true_,y_pred_)
-
-
-
-def total_variation_loss(y_pred):
-    return tf.reduce_mean(tf.image.total_variation(y_pred))
-
-def total_loss(y_true,y_pred,model,rec,p,s,tv):
-    return rec*reconstruction_loss(y_true,y_pred)+deep_loss(y_true,y_pred,model,p,s)+tv*total_variation_loss(y_pred)
-
-def training_loss(y_true,y_pred,model,rec,p,s,tv,w):
-    loss=0
-    for i in range(len(y_true)):
-        loss+=w[i]*total_loss(y_true[i],y_pred[i],model,rec,p,s,tv)
-    return loss
-
-
-
-'''
-
-
 class HierarchicalProbUNet(tf.keras.Model):
     def __init__(self, num_layers, num_filters, num_prior_layers, num_filters_prior, rec, p, s, tv, name=None):
         '''
@@ -480,8 +399,6 @@ class HierarchicalProbUNet(tf.keras.Model):
             else:
                 final_res.append(lp_result[i] * masks[i] + lp_input[i] * (1 - masks[i]) + tfa.image.gaussian_filter2d(
                     self.upsamp(final_res[i - 1])))
-                # final_res.append(lp_result[i]*masks[i]+lp_input[i]*(1-masks[i])+tfa.image.gaussian_filter2d(tf.image.resize(final_res[i-1],[final_res[i-1].get_shape().as_list()[1]*2,final_res[i-1].get_shape().as_list()[2]*2])))
-        # return final_res[len(lp_input)-1]
         return final_res[len(lp_input) - 1]
 
     def reconstruction_loss(self, y_true, y_pred):
@@ -577,14 +494,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         res_ = self.get_laplacian_pyramid(res_gaus)
         inp_ = self.get_laplacian_pyramid(inp_gaus)
         x1 = self.build_from_pyramid(inp_, res_, masks)
-        '''
-        res=[]
-        for i in range(len(xs)):
-            if i==0:
-                res.append(xs[i])
-            else:
-                res.append(tfa.image.gaussian_filter2d(self.upsamp(res[i-1]))+xs[i])
-        '''
+
         loss = self.training_loss(t, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior1)):
             if i == 0:
