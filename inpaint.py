@@ -160,6 +160,21 @@ class CeleTrainDataset(torch.utils.data.Dataset):
         return self.len
 
 
+def my_model():
+    model = HierarchicalProbUNet(
+        num_layers=5,
+        num_filters=[64, 128, 256, 512, 1024],
+        num_prior_layers=3,
+        num_filters_prior=[10, 10, 10],
+        rec=200.0,
+        p=[0, 0, 0, 0.0001, 0],
+        s=[0, 0, 0, 0.01, 0],
+        tv=0,
+        name='ProbUNet',
+    )
+    return model
+
+
 def train():
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
@@ -167,17 +182,7 @@ def train():
     out = '../output/naive_inpaint/'
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = HierarchicalProbUNet(
-            num_layers=5,
-            num_filters=[64, 128, 256, 512, 1024],
-            num_prior_layers=4,
-            num_filters_prior=[10, 10, 10, 10],
-            rec=200.0,
-            p=[0, 0, 0, 0.0001, 0],
-            s=[0, 0, 0, 0.01, 0],
-            tv=0,
-            name='ProbUNet',
-        )
+        model = my_model()
         model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
 
     train_dataset = CeleTrainDataset()
@@ -205,17 +210,7 @@ def continue_train(num):
     out = '../output/naive_inpaint/'
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = HierarchicalProbUNet(
-            num_layers=5,
-            num_filters=[64, 128, 256, 512, 1024],
-            num_prior_layers=4,
-            num_filters_prior=[10, 10, 10, 10],
-            rec=200.0,
-            p=[0, 0, 0, 0.0001, 0],
-            s=[0, 0, 0, 0.01, 0],
-            tv=0,
-            name='ProbUNet',
-        )
+        model = my_model()
         inputs = tf.keras.Input(shape=(256, 256, 7,))
         model(inputs)
         model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
@@ -245,17 +240,7 @@ def evaluation(num):
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     out = '../output/naive_inpaint/'
     # hpu hpu_temp
-    model = HierarchicalProbUNet(
-        num_layers=5,
-        num_filters=[64, 128, 256, 512, 1024],
-        num_prior_layers=3,
-        num_filters_prior=[10, 10, 10, 10],
-        rec=200.0,
-        p=[0, 0, 0, 0.0001, 0],
-        s=[0, 0, 0, 0.01, 0],
-        tv=0,
-        name='ProbUNet',
-    )
+    model = my_model()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
     model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
