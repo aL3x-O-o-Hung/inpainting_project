@@ -318,7 +318,7 @@ def kl_gauss(y_true, y_pred):
     mean_pred = y_pred[:, :, :, 0:s // 2]
     var_pred = y_pred[:, :, :, s // 2:]
     first = math_ops.log(math_ops.divide(var_pred, var_true))
-    second = 0.5 * math_ops.divide(var_true * var_true+ K.square(mean_true - mean_pred), var_pred * var_pred)
+    second = 0.5 * math_ops.divide(var_true * var_true + K.square(mean_true - mean_pred), var_pred * var_pred)
     loss = first + second - 0.5
     loss = tf.reduce_mean(loss)
     return loss
