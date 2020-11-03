@@ -168,11 +168,11 @@ def train():
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = HierarchicalProbUNet(
-            num_layers=6,
-            num_filters=[64, 128, 256, 512, 1024, 2048],
-            num_prior_layers=5,
-            num_filters_prior=[10, 10, 10, 10, 10],
-            rec=50.0,
+            num_layers=5,
+            num_filters=[64, 128, 256, 512, 1024],
+            num_prior_layers=4,
+            num_filters_prior=[10, 10, 10, 10],
+            rec=200.0,
             p=[0, 0, 0, 0.0001, 0],
             s=[0, 0, 0, 0.01, 0],
             tv=0,
@@ -206,11 +206,11 @@ def continue_train(num):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = HierarchicalProbUNet(
-            num_layers=6,
-            num_filters=[64, 128, 256, 512, 1024, 2048],
-            num_prior_layers=5,
-            num_filters_prior=[10, 10, 10, 10, 10],
-            rec=50.0,
+            num_layers=5,
+            num_filters=[64, 128, 256, 512, 1024],
+            num_prior_layers=4,
+            num_filters_prior=[10, 10, 10, 10],
+            rec=200.0,
             p=[0, 0, 0, 0.0001, 0],
             s=[0, 0, 0, 0.01, 0],
             tv=0,
@@ -246,11 +246,11 @@ def evaluation(num):
     out = '../output/naive_inpaint/'
     # hpu hpu_temp
     model = HierarchicalProbUNet(
-        num_layers=6,
-        num_filters=[64, 128, 256, 512, 1024, 2048],
-        num_prior_layers=5,
-        num_filters_prior=[10, 10, 10, 10, 10],
-        rec=50.0,
+        num_layers=5,
+        num_filters=[64, 128, 256, 512, 1024],
+        num_prior_layers=4,
+        num_filters_prior=[10, 10, 10, 10],
+        rec=200.0,
         p=[0, 0, 0, 0.0001, 0],
         s=[0, 0, 0, 0.01, 0],
         tv=0,
@@ -266,22 +266,6 @@ def evaluation(num):
         x = load_data_celeb(lis, 'valid')
         # y=model.sample(x[0:1,:,:,0:4],is_training=False)
         # y = model.sample(x[0:1, :, :, 0:4], is_training=False)
-
-        '''
-        plt.subplot(2,3,1)
-        plt.imshow(x[0,:,:,4])
-        plt.subplot(2,3,3)
-        plt.imshow(x[0,:,:,5])
-        plt.subplot(2,3,5)
-        plt.imshow(x[0,:,:,6])
-        plt.subplot(2,3,2)
-        plt.imshow(y[0,:,:,0])
-        plt.subplot(2,3,4)
-        plt.imshow(y[0,:,:,1])
-        plt.subplot(2,3,6)
-        plt.imshow(y[0,:,:,2])
-        plt.show()
-        '''
 
         plt.subplot(4, 2, 1)
         plt.imshow(x[0, :, :, 0:3])
