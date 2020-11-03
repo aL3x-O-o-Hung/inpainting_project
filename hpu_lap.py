@@ -419,14 +419,17 @@ class HierarchicalProbUNet(tf.keras.Model):
         for i in range(l - 1):
             if i == 0:
                 loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
-                loss = tf.reduce_mean(loss)
+                loss = weight * tf.reduce_mean(loss)
+                self.add_metric(loss, name='reconstruction loss' + str(i), aggregation='mean')
             else:
                 temp_loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
-                loss += tf.reduce_mean(temp_loss)
+                temp_loss = weight * tf.reduce_mean(temp_loss)
+                self.add_metric(temp_loss, name='reconstruction loss' + str(i), aggregation='mean')
+                loss += temp_loss
         temp_loss = 0.5 * (4 ** (l - 1)) * K.square(y_true - y_pred)
-        loss += tf.reduce_mean(temp_loss)
-        loss = weight * loss
-        self.add_metric(loss, name='reconstruction loss', aggregation='mean')
+        temp_loss = weight * tf.reduce_mean(temp_loss)
+        self.add_metric(temp_loss, name='reconstruction loss' + str(l-1), aggregation='mean')
+        loss += temp_loss
         return loss
 
     def perceptual_loss(self, y_true, y_pred, l, weight):
