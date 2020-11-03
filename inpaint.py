@@ -162,13 +162,13 @@ class CeleTrainDataset(torch.utils.data.Dataset):
 
 def my_model():
     model = HierarchicalProbUNet(
-        num_layers=6,
-        num_filters=[64, 128, 256, 512, 1024, 2048],
-        num_prior_layers=3,
-        num_filters_prior=[10, 10, 10],
+        num_layers=7,
+        num_filters=[64, 128, 256, 512, 1024, 1024, 1024],
+        num_prior_layers=4,
+        num_filters_prior=[10, 10, 10, 10],
         rec=1.0,
-        p=[0, 0, 0, 0.00001, 0],
-        s=[0, 0, 0, 0.001, 0],
+        p=[0, 0, 0, 0.00005, 0],
+        s=[0, 0, 0, 0.005, 0],
         tv=0,
         name='ProbUNet',
     )
