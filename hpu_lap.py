@@ -357,6 +357,8 @@ class HierarchicalProbUNet(tf.keras.Model):
                                                            name=name + '_decoder_post')
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
         self.VGG = VGG16()
+        for layer in self.VGG.layers:
+            layer.trainable = False
         self.VGGs = []
         for i in range(1, 6):
             if p[i - 1] > 0 or s[i - 1] > 0:
@@ -416,7 +418,7 @@ class HierarchicalProbUNet(tf.keras.Model):
             else:
                 temp_loss = 2 ** i * K.square(tl[i] - pl[i])
                 loss += tf.reduce_mean(temp_loss)
-        loss = loss / (2 ** l - 1)
+        # loss = loss / (2 ** l - 1)
         temp_loss = 0.5 * K.square(y_true - y_pred)
         loss += tf.reduce_mean(temp_loss)
         loss = weight * loss
@@ -506,10 +508,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior1)):
             if i == 0:
-                los = kl_gauss(prior2[i], prior1[i])
+                los = kl_gauss(prior2[i], prior1[i]) * (2**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = kl_gauss(prior2[i], prior1[i])
+                temp = kl_gauss(prior2[i], prior1[i]) * (2**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
