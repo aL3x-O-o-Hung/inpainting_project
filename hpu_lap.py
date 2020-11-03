@@ -161,7 +161,7 @@ def prob_function(inputs):
         samp = dist.sample([1, s[1], s[2], s[3]])
     else:
         samp = dist.sample([ts[0], s[1], s[2], s[3]])
-    dis = 0.5 * tf.math.multiply(samp, inputs[:, :, :, s[3]:])
+    dis = tf.math.multiply(samp, inputs[:, :, :, s[3]:])
     dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
     return dis
 
