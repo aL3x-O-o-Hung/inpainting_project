@@ -144,9 +144,9 @@ class PriorBlock(tf.keras.layers.Layer):
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, :s // 2]
         # mean =tf.keras.activations.tanh(mean)
-        logvar = x[:, :, :, s // 2:]
-        std = 0.2 + 5.0 * tf.keras.activations.sigmoid(logvar)
-        # var = K.exp(logvar)
+        logstd = x[:, :, :, s // 2:]
+        logstd = 2.5 * tf.keras.activations.tanh(logstd)
+        std = K.exp(logstd)
         # var = K.abs(logvar)
         return tf.concat([mean, std], axis=-1)
 
