@@ -145,7 +145,7 @@ class PriorBlock(tf.keras.layers.Layer):
         mean = x[:, :, :, :s // 2]
         # mean =tf.keras.activations.tanh(mean)
         logvar = x[:, :, :, s // 2:]
-        std = 0.01 + math.e * tf.keras.activations.sigmoid(logvar)
+        std = 0.1 + 10.0 * tf.keras.activations.sigmoid(logvar)
         # var = K.exp(logvar)
         # var = K.abs(logvar)
         return tf.concat([mean, std], axis=-1)
@@ -216,7 +216,6 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         self.num_filters_prior = num_filters_prior
         self.deconvs = []
         self.priors = []
-        self.prob_function = Prob()
         for i in range(num_layers):
             self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
             self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
@@ -228,12 +227,10 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         for i in range(self.num_layers):
             p = self.priors[i](x)
             prior.append(p)
-            p = self.prob_function(p)
-            prob.append(p)
             if i != self.num_layers - 1:
                 x = tf.concat([x, p], axis=-1)
                 x = self.deconvs[i](x, blocks[i], is_training=is_training)
-        return prior, prob
+        return prior
 
 
 class DecoderWithPriorBlock(tf.keras.layers.Layer):
@@ -251,12 +248,18 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
             self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
             self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
 
-    def call(self, inputs, blocks, prob, is_training=True):
+    def call(self, inputs, blocks, posterior, is_training=True):
         x = inputs
         prior = []
         for i in range(self.num_layers):
             p = self.priors[i](x)
             prior.append(p)
+            s = p.get_shape().as_list()[3]
+            true_posterior = tf.concat([
+                prior[i][:, :, :, :s // 2] + posterior[i][:, :, :, :s // 2],
+                prior[i][:, :, :, s // 2:] * posterior[:, :, :, s // 2:],
+            ], axis=-1)
+            prob = self.prob_function(true_posterior)
             x = tf.concat([x, prob[i]], axis=-1)
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
         return x, prior
@@ -297,9 +300,9 @@ class Decoder(tf.keras.layers.Layer):
         for i in range(num_layers):
             self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
 
-    def call(self, inputs, b, prob, is_training=True):
+    def call(self, inputs, b, posterior, is_training=True):
         x = inputs
-        x, prior = self.prior_decode(x, b[0:self.num_prior_layers], prob, is_training=is_training)
+        x, prior = self.prior_decode(x, b[0:self.num_prior_layers], posterior, is_training=is_training)
         for i in range(self.num_layers):
             x = self.tconvs[i](x, b[self.num_prior_layers + i], is_training=is_training)
         return x, prior
@@ -499,8 +502,8 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2 = b_list2[0:-1]
         b_list1.reverse()
         b_list2.reverse()
-        prior2, prob = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
-        x1, prior1 = self.decoder(x1, b_list1, prob, is_training=is_training)
+        posterior = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
+        x1, prior = self.decoder(x1, b_list1, posterior, is_training=is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
@@ -512,12 +515,12 @@ class HierarchicalProbUNet(tf.keras.Model):
         # x1 = self.build_from_pyramid(inp_, res_, masks)
 
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
-        for i in range(len(prior1)):
+        for i in range(len(prior)):
             if i == 0:
-                los = kl_gauss(prior2[i], prior1[i]) * (4**i)
+                los = kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = kl_gauss(prior2[i], prior1[i]) * (4**i)
+                temp = kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
