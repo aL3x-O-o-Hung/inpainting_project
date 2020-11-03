@@ -2,16 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cv2
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 import tensorflow as tf
 import tensorflow_addons as tfa
 import tensorflow_probability as tfp
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
-from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 
 BASE_NUM_KERNELS = 64
