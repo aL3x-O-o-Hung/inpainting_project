@@ -248,7 +248,7 @@ def evaluation(num):
     model = HierarchicalProbUNet(
         num_layers=5,
         num_filters=[64, 128, 256, 512, 1024],
-        num_prior_layers=4,
+        num_prior_layers=3,
         num_filters_prior=[10, 10, 10, 10],
         rec=200.0,
         p=[0, 0, 0, 0.0001, 0],

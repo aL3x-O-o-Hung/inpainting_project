@@ -337,7 +337,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.num_layers = num_layers
         self.num_filters = num_filters
         self.num_prior_layers = num_prior_layers
-        self.num_filters_decoder = num_filters[::-1]
+        self.num_filters_decoder = num_filters[::-1][1:]
         self.num_filters_prior = num_filters_prior
         self.encoder = Encoder(num_layers,
                                num_filters,
@@ -347,12 +347,12 @@ class HierarchicalProbUNet(tf.keras.Model):
                                     name=name + '_encoder_post')
         self.decoder = Decoder(num_layers=num_layers - num_prior_layers - 1,
                                num_prior_layers=num_prior_layers,
-                               num_filters=self.num_filters_decoder[num_prior_layers + 1:],
-                               num_filters_in_prior=self.num_filters_decoder[1:num_prior_layers + 1],
+                               num_filters=self.num_filters_decoder[num_prior_layers:],
+                               num_filters_in_prior=self.num_filters_decoder[:num_prior_layers],
                                num_filters_prior=num_filters_prior,
                                name=name + '_decoder')
         self.decoder_post = DecoderWithPriorBlockPosterior(num_prior_layers,
-                                                           self.num_filters_decoder[1:num_prior_layers + 1],
+                                                           self.num_filters_decoder[:num_prior_layers],
                                                            num_filters_prior,
                                                            name=name + '_decoder_post')
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
