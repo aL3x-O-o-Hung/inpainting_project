@@ -313,15 +313,16 @@ class Decoder(tf.keras.layers.Layer):
         return x
 
 
-def kl_gauss(y_true, y_pred):
-    s = y_true.get_shape().as_list()[3]
-    mean_true = y_true[:, :, :, 0:s // 2]
-    var_true = y_true[:, :, :, s // 2:]
-    mean_pred = y_pred[:, :, :, 0:s // 2]
-    var_pred = y_pred[:, :, :, s // 2:]
-    first = math_ops.log(math_ops.divide(var_pred, var_true))
-    second = 0.5 * math_ops.divide(var_true * var_true + K.square(mean_true - mean_pred), var_pred * var_pred)
-    loss = first + second - 0.5
+def my_kl_gauss(y_delta, y_prior):
+    s = y_delta.get_shape().as_list()[3]
+    mean_delta = y_delta[:, :, :, 0:s // 2]
+    std_delta = y_delta[:, :, :, s // 2:]
+    # mean_prior = y_prior[:, :, :, 0:s // 2]
+    std_prior = y_prior[:, :, :, s // 2:]
+    first = math_ops.log(std_delta)
+    second = 0.5 * math_ops.divide(K.square(mean_delta), K.square(std_prior))
+    third = 0.5 * K.square(std_delta)
+    loss = second + third - first - 0.5
     loss = tf.reduce_mean(loss)
     return loss
 
@@ -516,10 +517,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior)):
             if i == 0:
-                los = kl_gauss(posterior[i], prior[i]) * (4**i)
+                los = my_kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = kl_gauss(posterior[i], prior[i]) * (4**i)
+                temp = my_kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
