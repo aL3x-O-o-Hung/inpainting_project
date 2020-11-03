@@ -223,7 +223,6 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
     def call(self, inputs, blocks, is_training=True):
         x = inputs
         prior = []
-        prob = []
         for i in range(self.num_layers):
             p = self.priors[i](x)
             prior.append(p)
@@ -257,7 +256,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
             s = p.get_shape().as_list()[3]
             true_posterior = tf.concat([
                 prior[i][:, :, :, :s // 2] + posterior[i][:, :, :, :s // 2],
-                prior[i][:, :, :, s // 2:] * posterior[:, :, :, s // 2:],
+                prior[i][:, :, :, s // 2:] * posterior[i][:, :, :, s // 2:],
             ], axis=-1)
             prob = self.prob_function(true_posterior)
             x = tf.concat([x, prob[i]], axis=-1)
