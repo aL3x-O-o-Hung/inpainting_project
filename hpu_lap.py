@@ -412,13 +412,13 @@ class HierarchicalProbUNet(tf.keras.Model):
         pl = self.get_laplacian_pyramid(pg)
         for i in range(l):
             if i == 0:
-                loss = 2 ** i * K.square(tl[i] - pl[i])
+                loss = 0.5 * (4 ** i) * K.square(tl[i] - pl[i])
                 loss = tf.reduce_mean(loss)
             else:
-                temp_loss = 2 ** i * K.square(tl[i] - pl[i])
+                temp_loss = 0.5 * (4 ** i) * K.square(tl[i] - pl[i])
                 loss += tf.reduce_mean(temp_loss)
         # loss = loss / (2 ** l - 1)
-        temp_loss = 0.5 * K.square(y_true - y_pred)
+        temp_loss = 0.5 * (4 ** l) * K.square(y_true - y_pred)
         loss += tf.reduce_mean(temp_loss)
         loss = weight * loss
         self.add_metric(loss, name='reconstruction loss', aggregation='mean')
@@ -507,10 +507,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior1)):
             if i == 0:
-                los = kl_gauss(prior2[i], prior1[i]) * (2**i)
+                los = kl_gauss(prior2[i], prior1[i]) * (4**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = kl_gauss(prior2[i], prior1[i]) * (2**i)
+                temp = kl_gauss(prior2[i], prior1[i]) * (4**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
