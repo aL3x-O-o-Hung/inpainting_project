@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
 import tensorflow as tf
 import tensorflow_addons as tfa
 import tensorflow_probability as tfp
@@ -145,12 +146,12 @@ class PriorBlock(tf.keras.layers.Layer):
         x = self.conv(inputs)
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, 0:s // 2]
-        mean = tf.keras.activations.tanh(mean)
+        mean = math.e * tf.keras.activations.tanh(mean)
         logvar = x[:, :, :, s // 2:]
-        # logvar = tf.keras.activations.sigmoid(logvar)
-        var = K.exp(logvar)
-        # var=K.abs(logvar)
-        return tf.concat([mean, var], axis=-1)
+        std = 0.1 + math.e * tf.keras.activations.sigmoid(logvar)
+        # var = K.exp(logvar)
+        # var = K.abs(logvar)
+        return tf.concat([mean, std], axis=-1)
 
 
 @tf.function
@@ -358,11 +359,15 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.VGG = VGG16()
         self.VGGs = []
         for i in range(1, 6):
-            name = 'block' + str(i) + '_conv1'
-            out = self.VGG.get_layer(name).output
-            self.VGGs.append(tf.keras.Model(self.VGG.input, outputs=out))
-            for layer in self.VGGs[i - 1].layers:
-                layer.trainable = False
+            if p[i - 1] > 0 or s[i - 1] > 0:
+                name = 'block' + str(i) + '_conv1'
+                vgg_input = self.VGG.input
+                vgg_out = self.VGG.get_layer(name).output
+                self.VGGs.append(tf.keras.Model(inputs=vgg_input, outputs=vgg_out))
+                for layer in self.VGGs[i - 1].layers:
+                    layer.trainable = False
+            else:
+                self.VGGs.append(None)
         self.rec = rec
         self.p = p
         self.s = s
@@ -398,7 +403,7 @@ class HierarchicalProbUNet(tf.keras.Model):
                     self.upsamp(final_res[i - 1])))
         return final_res[len(lp_input) - 1]
 
-    def reconstruction_loss(self, y_true, y_pred):
+    def reconstruction_loss(self, y_true, y_pred, weight):
         l = 5
         tg = self.get_gaussian_pyramid(y_true, l)
         pg = self.get_gaussian_pyramid(y_pred, l)
@@ -412,15 +417,15 @@ class HierarchicalProbUNet(tf.keras.Model):
                 temp_loss = 2 ** i * K.square(tl[i] - pl[i])
                 loss += tf.reduce_mean(temp_loss)
         loss = loss / (2 ** l - 1)
-        k = 0.5
-        temp_loss = K.square(y_true - y_pred)
-        loss += k * tf.reduce_mean(temp_loss)
+        temp_loss = 0.5 * K.square(y_true - y_pred)
+        loss += tf.reduce_mean(temp_loss)
+        loss = weight * weight
         self.add_metric(loss, name='reconstruction loss', aggregation='mean')
         return loss
 
-    def perceptual_loss(self, y_true, y_pred, l):
-        loss = K.square((y_true - y_pred) / 255.0)
-        loss = tf.reduce_mean(loss)
+    def perceptual_loss(self, y_true, y_pred, l, weight):
+        loss = K.square(y_true - y_pred)
+        loss = weight * tf.reduce_mean(loss)
         self.add_metric(loss, name='perceptual loss' + str(l), aggregation='mean')
         return loss
 
@@ -434,25 +439,25 @@ class HierarchicalProbUNet(tf.keras.Model):
         gram = gram / K.cast(denominator, x.dtype)
         return gram
 
-    def style_loss(self, y_true, y_pred, l):
+    def style_loss(self, y_true, y_pred, l, weight):
         y_true = self.gram_matrix(y_true)
         y_pred = self.gram_matrix(y_pred)
-        loss = K.square((y_true - y_pred) / 255.0)
-        loss = tf.reduce_mean(loss)
+        loss = 0.5 * K.square(y_true - y_pred)
+        loss = weight * tf.reduce_mean(loss)
         self.add_metric(loss, name='style loss' + str(l), aggregation='mean')
         return loss
 
-    def deep_loss(self, y_true, y_pred, model, p, s):
+    def deep_loss(self, y_true, y_pred, VGG_model, p, s):
         y_true = tf.image.resize(y_true, [224, 224])
         y_true = preprocess_input(y_true * 255)
         y_pred = tf.image.resize(y_pred, [224, 224])
         y_pred = preprocess_input(y_pred * 255)
         loss = 0
-        for i in range(len(model)):
+        for i in range(len(VGG_model)):
             if p[i] > 0 or s[i] > 0:
-                y_true_ = model[i](y_true)
-                y_pred_ = model[i](y_pred)
-                loss += p[i] * self.perceptual_loss(y_true_, y_pred_, i) + s[i] * self.style_loss(y_true_, y_pred_, i)
+                y_true_ = VGG_model[i](y_true)
+                y_pred_ = VGG_model[i](y_pred)
+                loss += self.perceptual_loss(y_true_, y_pred_, i, p[i]) + self.style_loss(y_true_, y_pred_, i, s[i])
         return loss
 
     def total_variation_loss(self, y_pred):
@@ -460,16 +465,16 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.add_metric(loss, name='tv loss', aggregation='mean')
         return loss
 
-    def total_loss(self, y_true, y_pred, model, rec, p, s, tv):
-        loss = self.deep_loss(y_true, y_pred, model, p, s)
+    def total_loss(self, y_true, y_pred, VGG_model, rec, p, s, tv):
+        loss = self.deep_loss(y_true, y_pred, VGG_model, p, s)
         if rec != 0:
-            loss += rec * self.reconstruction_loss(y_true, y_pred)
+            loss += self.reconstruction_loss(y_true, y_pred, rec)
         if tv > 0:
             loss += tv * self.total_variation_loss(y_pred)
         return loss
 
-    def training_loss(self, y_true, y_pred, model, rec, p, s, tv):
-        loss = self.total_loss(y_true, y_pred, model, rec, p, s, tv)
+    def training_loss(self, y_true, y_pred, VGG_model, rec, p, s, tv):
+        loss = self.total_loss(y_true, y_pred, VGG_model, rec, p, s, tv)
         return loss
 
     def call(self, inputs, is_training=True):
@@ -500,8 +505,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         for i in range(len(prior1)):
             if i == 0:
                 los = kl_gauss(prior2[i], prior1[i])
+                self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
                 temp = kl_gauss(prior2[i], prior1[i])
+                self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
         return x1
