@@ -408,14 +408,14 @@ class HierarchicalProbUNet(tf.keras.Model):
         l = 5
         tg = self.get_gaussian_pyramid(y_true, l)
         pg = self.get_gaussian_pyramid(y_pred, l)
-        tl = self.get_laplacian_pyramid(tg)
-        pl = self.get_laplacian_pyramid(pg)
+        # tl = self.get_laplacian_pyramid(tg)
+        # pl = self.get_laplacian_pyramid(pg)
         for i in range(l):
             if i == 0:
-                loss = 0.5 * (4 ** i) * K.square(tl[i] - pl[i])
+                loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
                 loss = tf.reduce_mean(loss)
             else:
-                temp_loss = 0.5 * (4 ** i) * K.square(tl[i] - pl[i])
+                temp_loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
                 loss += tf.reduce_mean(temp_loss)
         # loss = loss / (2 ** l - 1)
         temp_loss = 0.5 * (4 ** l) * K.square(y_true - y_pred)
