@@ -140,7 +140,7 @@ class PriorBlock(tf.keras.layers.Layer):
         self.conv = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
 
     def call(self, inputs):
-        x = self.conv(inputs)
+        x = 0.1 * self.conv(inputs)
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, :s // 2]
         # mean =tf.keras.activations.tanh(mean)
