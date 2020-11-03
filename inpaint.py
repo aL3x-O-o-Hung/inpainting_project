@@ -165,11 +165,11 @@ def my_model():
         num_layers=7,
         num_filters=[64, 128, 256, 512, 1024, 1024, 1024],
         num_prior_layers=4,
-        num_filters_prior=[80, 40, 20, 10],
+        num_filters_prior=[40, 20, 10, 5],
         # 4 x 4, 8 x 8, 16 x 16, 32 x 32
-        rec=10.0,
-        p=[0, 0, 0, 0.0005, 0],
-        s=[0, 0, 0, 0.05, 0],
+        rec=1.0,
+        p=[0, 0, 0, 0.00002, 0],
+        s=[0, 0, 0, 0.002, 0],
         tv=0,
         name='ProbUNet',
     )
@@ -264,6 +264,32 @@ def evaluation(num):
         plt.show()
 
 
+def reconstruct(num):
+    print(tf.test.is_gpu_available())
+    print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
+    out = '../output/naive_inpaint/'
+    # hpu hpu_temp
+    model = my_model()
+    inputs = tf.keras.Input(shape=(256, 256, 7,))
+    model(inputs)
+    model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
+    lis = []
+    for i in range(27000, 30000):
+        lis.append(i)
+    while len(lis) != 0:
+        x = load_data_celeb(lis, 'valid')
+
+        plt.subplot(4, 2, 1)
+        plt.imshow(x[0, :, :, 0:3])
+        plt.subplot(4, 2, 2)
+        plt.imshow(x[0, :, :, 4:7])
+        for i in range(6):
+            y = model.reconstruct(x[0:1, :, :, 0:7], is_training=False)
+            plt.subplot(4, 2, i + 3)
+            plt.imshow(y[0, :, :, :])
+        plt.show()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str)
@@ -274,6 +300,8 @@ if __name__ == "__main__":
         train()
     elif args.mode == "eval":
         evaluation(args.start_epoch)
+    elif args.mode == "reconstruct":
+        reconstruct(args.start_epoch)
     elif args.mode == "continue_train":
         continue_train(args.start_epoch)
     else:

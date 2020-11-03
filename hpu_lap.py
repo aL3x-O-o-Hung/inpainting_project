@@ -161,7 +161,7 @@ def prob_function(inputs):
         samp = dist.sample([1, s[1], s[2], s[3]])
     else:
         samp = dist.sample([ts[0], s[1], s[2], s[3]])
-    dis = 0.2 * tf.math.multiply(samp, inputs[:, :, :, s[3]:])
+    dis = 0.3 * tf.math.multiply(samp, inputs[:, :, :, s[3]:])
     dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
     return dis
 
@@ -541,4 +541,25 @@ class HierarchicalProbUNet(tf.keras.Model):
         # res_ = self.get_laplacian_pyramid(res_gaus)
         # inp_ = self.get_laplacian_pyramid(inp_gaus)
         # x1 = self.build_from_pyramid(inp_, res_, masks)
+        return x1
+
+    def reconstruct(self, inputs, is_training=False):
+        x1 = inputs[:, :, :, 0:3]
+        x2 = inputs[:, :, :, 4:7]
+        original_input_x = x1
+        ground_truth_x = x2
+        mask = inputs[:, :, :, 3:4]
+        x1 = tf.concat((x1, mask), axis=-1)
+        x2 = tf.concat((x2, mask), axis=-1)
+        x1, b_list1 = self.encoder(x1, is_training=is_training)
+        b_list1 = b_list1[0:-1]
+        x2, b_list2 = self.encoder_post(x2, is_training=is_training)
+        b_list2 = b_list2[0:-1]
+        b_list1.reverse()
+        b_list2.reverse()
+        posterior = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
+        x1, prior = self.decoder(x1, b_list1, posterior, is_training=is_training)
+        x1 = self.conv(x1)
+        x1 = tf.keras.activations.sigmoid(x1)
+        x1 = x1 * mask + original_input_x * (1 - mask)
         return x1
