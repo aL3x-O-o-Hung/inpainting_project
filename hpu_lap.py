@@ -405,12 +405,12 @@ class HierarchicalProbUNet(tf.keras.Model):
         return final_res[len(lp_input) - 1]
 
     def reconstruction_loss(self, y_true, y_pred, weight):
-        l = self.num_layers - 1
+        l = self.num_layers
         tg = self.get_gaussian_pyramid(y_true, l)
         pg = self.get_gaussian_pyramid(y_pred, l)
         # tl = self.get_laplacian_pyramid(tg)
         # pl = self.get_laplacian_pyramid(pg)
-        for i in range(l):
+        for i in range(l - 1):
             if i == 0:
                 loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
                 loss = tf.reduce_mean(loss)
@@ -418,7 +418,7 @@ class HierarchicalProbUNet(tf.keras.Model):
                 temp_loss = 0.5 * (4 ** i) * K.square(tg[i] - pg[i])
                 loss += tf.reduce_mean(temp_loss)
         # loss = loss / (2 ** l - 1)
-        temp_loss = 0.5 * (4 ** l) * K.square(y_true - y_pred)
+        temp_loss = 0.5 * (4 ** (l - 1)) * K.square(y_true - y_pred)
         loss += tf.reduce_mean(temp_loss)
         loss = weight * loss
         self.add_metric(loss, name='reconstruction loss', aggregation='mean')
