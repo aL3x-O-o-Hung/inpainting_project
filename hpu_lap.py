@@ -153,10 +153,11 @@ class PriorBlock(tf.keras.layers.Layer):
 
 @tf.function
 def prob_function(inputs):
-    s = inputs.get_shape().as_list()
+    ts = inputs.get_shape()
+    s = ts.as_list()
     s[3] = int(s[3] / 2)
     dist = tfp.distributions.Normal(loc=0.0, scale=1.0)
-    samp = dist.sample([1, s[1], s[2], s[3]])
+    samp = dist.sample([ts[0], s[1], s[2], s[3]])
     dis = tf.math.multiply(samp, inputs[:, :, :, s[3]:])
     dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
     return dis
@@ -167,10 +168,11 @@ class Prob(tf.keras.layers.Layer):
         super(Prob, self).__init__(name=name)
 
     def call(self, inputs):
-        s = inputs.get_shape().as_list()
+        ts = inputs.get_shape()
+        s = ts.as_list()
         s[3] = int(s[3] / 2)
         dist = tfp.distributions.Normal(loc=0.0, scale=1.0)
-        samp = dist.sample([1, s[1], s[2], s[3]])
+        samp = dist.sample([ts[0], s[1], s[2], s[3]])
         dis = tf.math.multiply(samp, inputs[:, :, :, s[3]:])
         dis = tf.math.add(dis, inputs[:, :, :, 0:s[3]])
         return dis
