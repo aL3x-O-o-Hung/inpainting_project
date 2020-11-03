@@ -165,7 +165,7 @@ def my_model():
         num_layers=7,
         num_filters=[64, 128, 256, 512, 1024, 1024, 1024],
         num_prior_layers=3,
-        num_filters_prior=[20, 20, 20],
+        num_filters_prior=[10, 10, 10],
         rec=0.1,
         p=[0, 0, 0, 0.000005, 0],
         s=[0, 0, 0, 0.0005, 0],
