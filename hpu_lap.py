@@ -20,10 +20,7 @@ class BatchNormRelu(tf.keras.layers.Layer):
 
     def __init__(self, name=None, dtype=None):
         super(BatchNormRelu, self).__init__(name=name)
-        self.bnorm = tf.keras.layers.BatchNormalization(momentum=0.9,
-                                                        renorm=True,
-                                                        renorm_momentum=0.8,
-                                                        dtype=dtype)
+        self.bnorm = tf.keras.layers.BatchNormalization(momentum=0.9, dtype=dtype)
 
     def call(self, inputs, is_training):
         x = self.bnorm(inputs, training=is_training)
