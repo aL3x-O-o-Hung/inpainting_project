@@ -393,24 +393,24 @@ class HierarchicalProbUNet(tf.keras.Model):
         masks = masks[::-1]
         return masks
 
-    def get_laplacian_pyramid(self, p):
-        py = []
-        for i in range(len(p)):
-            if i == 0:
-                py.append(p[i])
-            else:
-                py.append(p[i] - tfa.image.gaussian_filter2d(self.upsamp(p[i - 1])))
-        return py
-
-    def build_from_pyramid(self, lp_input, lp_result, masks):
-        final_res = []
-        for i in range(len(lp_input)):
-            if i == 0:
-                final_res.append(lp_result[i] * masks[i] + lp_input[i] * (1 - masks[i]))
-            else:
-                final_res.append(lp_result[i] * masks[i] + lp_input[i] * (1 - masks[i]) +
-                                 tfa.image.gaussian_filter2d(self.upsamp(final_res[i - 1])))
-        return final_res[len(lp_input) - 1]
+    # def get_laplacian_pyramid(self, p):
+    #     py = []
+    #     for i in range(len(p)):
+    #         if i == 0:
+    #             py.append(p[i])
+    #         else:
+    #             py.append(p[i] - tfa.image.gaussian_filter2d(self.upsamp(p[i - 1])))
+    #     return py
+    #
+    # def build_from_pyramid(self, lp_input, lp_result, masks):
+    #     final_res = []
+    #     for i in range(len(lp_input)):
+    #         if i == 0:
+    #             final_res.append(lp_result[i] * masks[i] + lp_input[i] * (1 - masks[i]))
+    #         else:
+    #             final_res.append(lp_result[i] * masks[i] + lp_input[i] * (1 - masks[i]) +
+    #                              tfa.image.gaussian_filter2d(self.upsamp(final_res[i - 1])))
+    #     return final_res[len(lp_input) - 1]
 
     def reconstruction_loss(self, y_true, y_pred, weight):
         l = self.num_layers
