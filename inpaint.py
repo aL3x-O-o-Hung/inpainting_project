@@ -250,8 +250,6 @@ def evaluation(num):
         lis.append(i)
     while len(lis) != 0:
         x = load_data_celeb(lis, 'valid')
-        # y=model.sample(x[0:1,:,:,0:4],is_training=False)
-        # y = model.sample(x[0:1, :, :, 0:4], is_training=False)
 
         plt.subplot(4, 2, 1)
         plt.imshow(x[0, :, :, 0:3])
