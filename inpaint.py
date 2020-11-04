@@ -2,6 +2,7 @@ import argparse
 import os
 
 import cv2
+import gc
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -197,6 +198,8 @@ def train():
         #     print(epoch, len(lis))
         #     x = load_data_celeb(lis)
         #     model.fit(x, x, epochs=1, batch_size=16)
+        tf.keras.backend.clear_session()
+        gc.collect()
         for c, x in enumerate(data_loader):
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
@@ -230,6 +233,8 @@ def continue_train(num):
         #     x = load_data_celeb(lis)
         #     model.fit(x, x, epochs=1, batch_size=16)
         # model.save_weights(out + str(epoch) + '.h5', save_format='h5')
+        tf.keras.backend.clear_session()
+        gc.collect()
         for c, x in enumerate(data_loader):
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
