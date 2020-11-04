@@ -313,7 +313,8 @@ class Decoder(tf.keras.layers.Layer):
         return x
 
 
-def my_kl_gauss(y_delta, y_prior):
+def residual_kl_gauss(y_delta, y_prior):
+    # See NVAE paper
     s = y_delta.get_shape().as_list()[3]
     mean_delta = y_delta[:, :, :, 0:s // 2]
     std_delta = y_delta[:, :, :, s // 2:]
@@ -517,10 +518,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior)):
             if i == 0:
-                los = my_kl_gauss(posterior[i], prior[i]) * (4**i)
+                los = residual_kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = my_kl_gauss(posterior[i], prior[i]) * (4**i)
+                temp = residual_kl_gauss(posterior[i], prior[i]) * (4**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
