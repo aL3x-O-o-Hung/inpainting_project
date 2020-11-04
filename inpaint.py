@@ -187,7 +187,7 @@ def train():
         model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
 
     train_dataset = CeleTrainDataset()
-    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=8)
+    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=4)
 
     for epoch in range(epochs):
         # lis = []
@@ -201,6 +201,7 @@ def train():
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=16)
+            del x
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
@@ -218,7 +219,7 @@ def continue_train(num):
         model.compile()
 
     train_dataset = CeleTrainDataset()
-    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=8)
+    data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=4)
 
     for epoch in range(num + 1, epochs):
         # lis = []
@@ -233,6 +234,7 @@ def continue_train(num):
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=16)
+            del x
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
@@ -251,6 +253,7 @@ def evaluation(num):
     while len(lis) != 0:
         x = load_data_celeb(lis, 'valid')
 
+        plt.figure(figsize=(15 * 4, 15 * 2))
         plt.subplot(4, 2, 1)
         plt.imshow(x[0, :, :, 0:3])
         plt.subplot(4, 2, 2)
@@ -277,6 +280,7 @@ def reconstruct(num):
     while len(lis) != 0:
         x = load_data_celeb(lis, 'valid')
 
+        plt.figure(figsize=(15 * 4, 15 * 2))
         plt.subplot(4, 2, 1)
         plt.imshow(x[0, :, :, 0:3])
         plt.subplot(4, 2, 2)
