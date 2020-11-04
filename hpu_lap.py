@@ -247,18 +247,18 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
             self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
             self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
 
-    def call(self, inputs, blocks, posterior, is_training=True):
+    def call(self, inputs, blocks, posterior_delta, is_training=True):
         x = inputs
         prior = []
         for i in range(self.num_layers):
             p = self.priors[i](x)
             prior.append(p)
             s = p.get_shape().as_list()[3]
-            true_posterior = tf.concat([
-                prior[i][:, :, :, :s // 2] + posterior[i][:, :, :, :s // 2],
-                prior[i][:, :, :, s // 2:] * posterior[i][:, :, :, s // 2:],
+            posterior = tf.concat([
+                prior[i][:, :, :, :s // 2] + posterior_delta[i][:, :, :, :s // 2],
+                prior[i][:, :, :, s // 2:] * posterior_delta[i][:, :, :, s // 2:],
             ], axis=-1)
-            prob = self.prob_function(true_posterior)
+            prob = self.prob_function(posterior)
             x = tf.concat([x, prob], axis=-1)
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
         return x, prior
@@ -299,9 +299,9 @@ class Decoder(tf.keras.layers.Layer):
         for i in range(num_layers):
             self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
 
-    def call(self, inputs, b, posterior, is_training=True):
+    def call(self, inputs, b, posterior_delta, is_training=True):
         x = inputs
-        x, prior = self.prior_decode(x, b[0:self.num_prior_layers], posterior, is_training=is_training)
+        x, prior = self.prior_decode(x, b[0:self.num_prior_layers], posterior_delta, is_training=is_training)
         for i in range(self.num_layers):
             x = self.tconvs[i](x, b[self.num_prior_layers + i], is_training=is_training)
         return x, prior
@@ -503,8 +503,8 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2 = b_list2[0:-1]
         b_list1.reverse()
         b_list2.reverse()
-        posterior = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
-        x1, prior = self.decoder(x1, b_list1, posterior, is_training=is_training)
+        posterior_delta = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
+        x1, prior = self.decoder(x1, b_list1, posterior_delta, is_training=is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
@@ -518,10 +518,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior)):
             if i == 0:
-                los = residual_kl_gauss(posterior[i], prior[i]) * (4**i)
+                los = residual_kl_gauss(posterior_delta[i], prior[i]) * (4**i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = residual_kl_gauss(posterior[i], prior[i]) * (4**i)
+                temp = residual_kl_gauss(posterior_delta[i], prior[i]) * (4**i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
