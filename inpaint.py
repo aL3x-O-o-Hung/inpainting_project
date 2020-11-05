@@ -211,7 +211,7 @@ def train():
 def continue_train(num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
-    epochs = 50
+    epochs = 100
     out = '../output/naive_inpaint/'
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
