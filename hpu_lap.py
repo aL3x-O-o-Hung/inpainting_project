@@ -208,6 +208,15 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                                         kernel_size=3,
                                         stride=1)
 
+        self.brelu31 = BatchNormRelu()
+        self.conv31 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+        self.brelu32 = BatchNormRelu()
+        self.conv32 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+
     def call(self, inputs, output_b, is_training):
         x = self.tconv1(inputs)
 
@@ -233,6 +242,12 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         y = self.conv21(y)
         y = self.brelu22(y, is_training)
         y = self.conv22(y)
+        x = x + y
+
+        y = self.brelu31(x, is_training)
+        y = self.conv31(y)
+        y = self.brelu32(y, is_training)
+        y = self.conv32(y)
         x = x + y
 
         x = self.brelu1(x)
