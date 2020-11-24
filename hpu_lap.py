@@ -278,7 +278,7 @@ class ResNetPriorBlock(tf.keras.layers.Layer):
     """calculating Prior Block"""
 
     def __init__(self, filters, name=None):  # filters: number of the layers incorporated into the decoder
-        super(PriorBlock, self).__init__(name=name)
+        super(ResNetPriorBlock, self).__init__(name=name)
         self.conv1 = Conv2DFixedPadding(filters=filters * 8, kernel_size=1, stride=1)
         self.bn1 = BatchNormRelu()
         self.conv2 = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
