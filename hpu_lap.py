@@ -96,6 +96,52 @@ class ConvBlock(tf.keras.layers.Layer):
         return x, output_b
 
 
+class DownSampleBlock(tf.keras.layers.Layer):
+    """Downsampling ConvBlock on Encoder side"""
+
+    def __init__(self, filters, kernel_size=3, name=None):
+        super(DownSampleBlock, self).__init__(name=name)
+        self.conv = tf.keras.layers.Conv2D(
+            filters,
+            kernel_size=kernel_size,
+            strides=2,
+            dilation_rate=1,
+            padding='same',
+            activation=None,
+        )
+        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.9)
+        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.9)
+
+    def call(self, inputs, is_training):
+        output_b = self.bn1(inputs)
+        x = self.conv(inputs)
+        x = self.bn2(x)
+        return x, output_b
+
+
+class ResNetConvBlock(tf.keras.layers.Layer):
+    """Downsampling ConvBlock on Encoder side"""
+
+    def __init__(self, filters, kernel_size=3, name=None):
+        super(ResNetConvBlock, self).__init__(name=name)
+        self.conv1 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=kernel_size,
+                                        stride=1)
+        self.brelu1 = BatchNormRelu()
+        self.conv2 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=kernel_size,
+                                        stride=1)
+        self.brelu2 = BatchNormRelu()
+
+    def call(self, inputs, is_training):
+        x = self.brelu1(inputs, is_training)
+        x = self.conv1(x)
+        x = self.brelu2(x, is_training)
+        x = self.conv2(x)
+        x = inputs + x
+        return x
+
+
 class DeConvBlock(tf.keras.layers.Layer):
     """Upsampling DeConvBlock on Decoder side"""
 
@@ -132,6 +178,68 @@ class DeConvBlock(tf.keras.layers.Layer):
         return x
 
 
+class ResNetDeConvBlock(tf.keras.layers.Layer):
+    """Upsampling DeConvBlock on Decoder side"""
+
+    def __init__(self, filters, kernel_size=2, name=None):
+        super(ResNetDeConvBlock, self).__init__(name=name)
+        self.tconv1 = Conv2DTranspose(output_channels=filters,
+                                      kernel_size=kernel_size)
+        self.conv1 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+        self.brelu1 = tf.keras.layers.BatchNormalization(momentum=0.9)
+
+        self.brelu11 = BatchNormRelu()
+        self.conv11 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+        self.brelu12 = BatchNormRelu()
+        self.conv12 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+
+        self.brelu21 = BatchNormRelu()
+        self.conv21 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+        self.brelu22 = BatchNormRelu()
+        self.conv22 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=3,
+                                        stride=1)
+
+    def call(self, inputs, output_b, is_training):
+        x = self.tconv1(inputs)
+
+        """Cropping is only used when convolution padding is 'valid'"""
+        src_shape = output_b.shape[1]
+        tgt_shape = x.shape[1]
+        start_pixel = int((src_shape - tgt_shape) / 2)
+        end_pixel = start_pixel + tgt_shape
+
+        cropped_b = output_b[:, start_pixel:end_pixel, start_pixel:end_pixel, :]
+        """Assumes that data format is NHWC"""
+        x = tf.concat([cropped_b, x], axis=-1)
+
+        x = self.conv1(x)
+
+        y = self.brelu11(x, is_training)
+        y = self.conv11(y)
+        y = self.brelu12(y, is_training)
+        y = self.conv12(y)
+        x = x + y
+
+        y = self.brelu21(x, is_training)
+        y = self.conv21(y)
+        y = self.brelu22(y, is_training)
+        y = self.conv22(y)
+        x = x + y
+
+        x = self.brelu1(x)
+
+        return x
+
+
 class PriorBlock(tf.keras.layers.Layer):
     """calculating Prior Block"""
 
@@ -141,6 +249,29 @@ class PriorBlock(tf.keras.layers.Layer):
 
     def call(self, inputs):
         x = 0.1 * self.conv(inputs)
+        s = x.get_shape().as_list()[3]
+        mean = x[:, :, :, :s // 2]
+        # mean =tf.keras.activations.tanh(mean)
+        logstd = x[:, :, :, s // 2:]
+        logstd = 3.0 * tf.keras.activations.tanh(logstd)
+        std = K.exp(logstd)
+        # var = K.abs(logvar)
+        return tf.concat([mean, std], axis=-1)
+
+
+class ResNetPriorBlock(tf.keras.layers.Layer):
+    """calculating Prior Block"""
+
+    def __init__(self, filters, name=None):  # filters: number of the layers incorporated into the decoder
+        super(PriorBlock, self).__init__(name=name)
+        self.conv1 = Conv2DFixedPadding(filters=filters * 8, kernel_size=1, stride=1)
+        self.bn1 = BatchNormRelu()
+        self.conv2 = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
+
+    def call(self, inputs):
+        x = self.conv1(inputs)
+        x = self.bn1(x)
+        x = 0.1 * self.conv2(x)
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, :s // 2]
         # mean =tf.keras.activations.tanh(mean)
@@ -187,29 +318,65 @@ class Prob(tf.keras.layers.Layer):
 class Encoder(tf.keras.layers.Layer):
     """encoder of the network"""
 
-    def __init__(self, num_layers, num_filters, name=None):
+    def __init__(self, num_layers, num_filters, name=None, use_resnet=False):
         super(Encoder, self).__init__(name=name)
-        self.convs = []
-        for i in range(num_layers):
-            if i < num_layers - 1:
-                conv_temp = ConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
-            else:
-                conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
-            self.convs.append(conv_temp)
+        self.use_resnet = use_resnet
+        if use_resnet:
+            self.convs = []
+            for i in range(num_layers):
+                if i == 0:
+                    self.convs.append([])
+                    conv_temp = ConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
+                    self.convs[-1].append(conv_temp)
+
+                elif i < num_layers - 1:
+                    self.convs.append([])
+                    for j in range(3):
+                        conv_temp = ResNetConvBlock(filters=num_filters[i],
+                                                    name=name + '_conv' + str(i + 1) + '_' + str(j + 1))
+                        self.convs[-1].append(conv_temp)
+                    conv_temp = DownSampleBlock(filters=num_filters[i + 1])
+                    self.convs[-1].append(conv_temp)
+
+                else:
+                    self.convs.append([])
+                    for j in range(3):
+                        conv_temp = ResNetConvBlock(filters=num_filters[i],
+                                                    name=name + '_conv' + str(i + 1) + '_' + str(j + 1))
+                        self.convs[-1].append(conv_temp)
+
+        else:
+            self.convs = []
+            for i in range(num_layers):
+                if i < num_layers - 1:
+                    conv_temp = ConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
+                else:
+                    conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
+                self.convs.append(conv_temp)
 
     def call(self, inputs, is_training=True):
         list_b = []
         x = inputs
-        for i in range(len(self.convs)):
-            x, b = self.convs[i](x, is_training=is_training)
-            list_b.append(b)
+        if self.use_resnet:
+            for i in range(len(self.convs)):
+                for j in range(len(self.convs[i]) - 1):
+                    x = self.convs[i][j](x, is_training=is_training)
+                if i < len(self.convs) - 1:
+                    x, b = self.convs[i][-1](x, is_training=is_training)
+                else:
+                    b = x
+                list_b.append(b)
+        else:
+            for i in range(len(self.convs)):
+                x, b = self.convs[i](x, is_training=is_training)
+                list_b.append(b)
         return x, list_b
 
 
 class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
     """decoder of the network with prior block in Posterior"""
 
-    def __init__(self, num_layers, num_filters, num_filters_prior, name=None):
+    def __init__(self, num_layers, num_filters, num_filters_prior, name=None, use_resnet=False):
         super(DecoderWithPriorBlockPosterior, self).__init__(name=name)
         self.num_layers = num_layers
         self.num_filters = num_filters
@@ -217,8 +384,12 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         self.deconvs = []
         self.priors = []
         for i in range(num_layers):
-            self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-            self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
+            if use_resnet:
+                self.deconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
+                self.priors.append(ResNetPriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
+            else:
+                self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
+                self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
 
     def call(self, inputs, blocks, is_training=True):
         x = inputs
@@ -235,7 +406,7 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
 class DecoderWithPriorBlock(tf.keras.layers.Layer):
     """decoder of the network with prior block"""
 
-    def __init__(self, num_layers, num_filters, num_filters_prior, name=None):
+    def __init__(self, num_layers, num_filters, num_filters_prior, name=None, use_resnet=False):
         super(DecoderWithPriorBlock, self).__init__(name=name)
         self.num_layers = num_layers
         self.num_filters = num_filters
@@ -244,8 +415,12 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
         self.priors = []
         self.prob_function = Prob()
         for i in range(num_layers):
-            self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-            self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
+            if use_resnet:
+                self.deconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
+                self.priors.append(ResNetPriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
+            else:
+                self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
+                self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
 
     def call(self, inputs, blocks, posterior_delta, is_training=True):
         x = inputs
@@ -275,7 +450,8 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
 class Decoder(tf.keras.layers.Layer):
     """decoder of the network"""
 
-    def __init__(self, num_layers, num_prior_layers, num_filters, num_filters_in_prior, num_filters_prior, name=None):
+    def __init__(self, num_layers, num_prior_layers, num_filters, num_filters_in_prior, num_filters_prior,
+                 name=None, use_resnet=False):
         """
         :param num_layers: number of layers in the non-prior part
         :param num_prior_layers: number of layers in the prior part
@@ -293,7 +469,8 @@ class Decoder(tf.keras.layers.Layer):
         self.prior_decode = DecoderWithPriorBlock(num_prior_layers,
                                                   num_filters_in_prior,
                                                   num_filters_prior,
-                                                  name=name + '_with_prior')
+                                                  name=name + '_with_prior',
+                                                  use_resnet=use_resnet)
         self.tconvs = []
         self.generate = []
         for i in range(num_layers):
@@ -329,8 +506,9 @@ def residual_kl_gauss(y_delta, y_prior):
 
 
 class HierarchicalProbUNet(tf.keras.Model):
-    def __init__(self, num_layers, num_filters, num_prior_layers, num_filters_prior, rec, p, s, tv, name=None):
-        '''
+    def __init__(self, num_layers, num_filters, num_prior_layers, num_filters_prior, rec, p, s, tv,
+                 name=None, use_resnet=False):
+        """
         :param num_layers: an integer, number of layers in the encoder side
         :param num_filters: a list, number of filters at each layer
         :param num_prior_layers: an integer, number of layers with prior blocks
@@ -340,7 +518,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         :param s: a list, weights of style loss at each VGG layer
         :param tv: a float, weight of total variation loss
         :param name:
-        '''
+        """
         super(HierarchicalProbUNet, self).__init__(name=name)
         self.num_layers = num_layers
         self.num_filters = num_filters
@@ -349,20 +527,24 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.num_filters_prior = num_filters_prior
         self.encoder = Encoder(num_layers,
                                num_filters,
-                               name=name + '_encoder')
+                               name=name + '_encoder',
+                               use_resnet=use_resnet)
         self.encoder_post = Encoder(num_layers,
                                     num_filters,
-                                    name=name + '_encoder_post')
+                                    name=name + '_encoder_post',
+                                    use_resnet=use_resnet)
         self.decoder = Decoder(num_layers=num_layers - num_prior_layers - 1,
                                num_prior_layers=num_prior_layers,
                                num_filters=self.num_filters_decoder[num_prior_layers:],
                                num_filters_in_prior=self.num_filters_decoder[:num_prior_layers],
                                num_filters_prior=num_filters_prior,
-                               name=name + '_decoder')
+                               name=name + '_decoder',
+                               use_resnet=use_resnet)
         self.decoder_post = DecoderWithPriorBlockPosterior(num_prior_layers,
                                                            self.num_filters_decoder[:num_prior_layers],
                                                            num_filters_prior,
-                                                           name=name + '_decoder_post')
+                                                           name=name + '_decoder_post',
+                                                           use_resnet=use_resnet)
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
         self.VGG = VGG16()
         for layer in self.VGG.layers:
