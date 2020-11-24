@@ -188,7 +188,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         self.conv1 = Conv2DFixedPadding(filters=filters,
                                         kernel_size=3,
                                         stride=1)
-        self.brelu1 = tf.keras.layers.BatchNormalization(momentum=0.9)
+        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.9)
 
         self.brelu11 = BatchNormRelu()
         self.conv11 = Conv2DFixedPadding(filters=filters,
@@ -250,7 +250,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         y = self.conv32(y)
         x = x + y
 
-        x = self.brelu1(x)
+        x = self.bn1(x)
 
         return x
 
