@@ -11,8 +11,6 @@ from hpu_lap import HierarchicalProbUNet
 
 data_dir = "../data/CelebAMask-HQ"
 output_dir = '../output/naive_inpaint_v3/'
-rec_weight = 1.0
-deep_weight = 4.0
 
 
 # def my_model():
@@ -29,22 +27,6 @@ deep_weight = 4.0
 #         name='ProbUNet',
 #     )
 #     return model
-
-def my_model():
-    model = HierarchicalProbUNet(
-        num_layers=8,
-        num_filters=[64, 128, 256, 512, 1024, 1024, 1024, 1024],
-        num_prior_layers=5,
-        num_filters_prior=[80, 40, 20, 10, 5],
-        # 4 x 4, 8 x 8, 16 x 16, 32 x 32
-        rec=1.0 * rec_weight,
-        p=[0, 0, 0, 0.00002 * deep_weight * rec_weight, 0],
-        s=[0, 0, 0, 0.002 * deep_weight * rec_weight, 0],
-        tv=0,
-        name='ProbUNet',
-        use_resnet=True,
-    )
-    return model
 
 
 def generate_free_form_mask(height, width, m1, m2, maxver=70, max_brush_width=30, maxlength=30):
@@ -196,7 +178,7 @@ class CeleTrainDataset(torch.utils.data.Dataset):
         return self.len
 
 
-def train(learning_rate=0.01):
+def train(my_model, learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 30
@@ -227,7 +209,7 @@ def train(learning_rate=0.01):
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
-def continue_train(num, learning_rate=0.01):
+def continue_train(my_model, num, learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 100
@@ -262,7 +244,7 @@ def continue_train(num, learning_rate=0.01):
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
-def evaluation(num):
+def evaluation(my_model, num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     out = output_dir
@@ -270,7 +252,7 @@ def evaluation(num):
     model = my_model()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
-    model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
+    model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):
         lis.append(i)
@@ -289,15 +271,15 @@ def evaluation(num):
         plt.show()
 
 
-def reconstruct(num):
+def reconstruct(my_model, num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
-    out = '../output/naive_inpaint/'
+    out = output_dir
     # hpu hpu_temp
     model = my_model()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
     model(inputs)
-    model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
+    model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):
         lis.append(i)
@@ -321,18 +303,9 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str)
     parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--rec_weight', type=float, default=1.0)
+    parser.add_argument('--deep_weight', type=float, default=4.0)
     args = parser.parse_args()
-
-    if args.mode == "train":
-        train(args.learning_rate)
-    elif args.mode == "eval":
-        evaluation(args.start_epoch)
-    elif args.mode == "reconstruct":
-        reconstruct(args.start_epoch)
-    elif args.mode == "continue_train":
-        continue_train(args.start_epoch, args.learning_rate)
-    else:
-        raise NotImplementedError
 
     gpus = tf.config.experimental.list_physical_devices('GPU')
     if gpus:
@@ -345,3 +318,30 @@ if __name__ == "__main__":
       except RuntimeError as e:
         # Memory growth must be set before GPUs have been initialized
         print(e)
+
+    def my_model():
+        model = HierarchicalProbUNet(
+            num_layers=8,
+            num_filters=[64, 128, 256, 512, 1024, 1024, 1024, 1024],
+            num_prior_layers=5,
+            num_filters_prior=[80, 40, 20, 10, 5],
+            # 4 x 4, 8 x 8, 16 x 16, 32 x 32
+            rec=1.0 * args.rec_weight,
+            p=[0, 0, 0, 0.00002 * args.deep_weight * args.rec_weight, 0],
+            s=[0, 0, 0, 0.002 * args.deep_weight * args.rec_weight, 0],
+            tv=0,
+            name='ProbUNet',
+            use_resnet=True,
+        )
+        return model
+
+    if args.mode == "train":
+        train(my_model, args.learning_rate)
+    elif args.mode == "eval":
+        evaluation(my_model, args.start_epoch)
+    elif args.mode == "reconstruct":
+        reconstruct(my_model, args.start_epoch)
+    elif args.mode == "continue_train":
+        continue_train(my_model, args.start_epoch, args.learning_rate)
+    else:
+        raise NotImplementedError
