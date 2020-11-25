@@ -124,20 +124,43 @@ class ResNetConvBlock(tf.keras.layers.Layer):
 
     def __init__(self, filters, kernel_size=3, name=None):
         super(ResNetConvBlock, self).__init__(name=name)
-        self.conv1 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=kernel_size,
-                                        stride=1)
-        self.brelu1 = BatchNormRelu()
-        self.conv2 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=kernel_size,
-                                        stride=1)
-        self.brelu2 = BatchNormRelu()
+        self.filters = filters
+        if self.filters <= 128:
+            self.conv1 = Conv2DFixedPadding(filters=filters,
+                                            kernel_size=kernel_size,
+                                            stride=1)
+            self.brelu1 = BatchNormRelu()
+            self.conv2 = Conv2DFixedPadding(filters=filters,
+                                            kernel_size=kernel_size,
+                                            stride=1)
+            self.brelu2 = BatchNormRelu()
+        else:
+            self.conv1 = Conv2DFixedPadding(filters=filters // 4,
+                                            kernel_size=1,
+                                            stride=1)
+            self.brelu1 = BatchNormRelu()
+            self.conv2 = Conv2DFixedPadding(filters=filters // 4,
+                                            kernel_size=kernel_size,
+                                            stride=1)
+            self.brelu2 = BatchNormRelu()
+            self.conv3 = Conv2DFixedPadding(filters=filters,
+                                            kernel_size=1,
+                                            stride=1)
+            self.brelu3 = BatchNormRelu()
 
     def call(self, inputs, is_training):
-        x = self.brelu1(inputs, is_training)
-        x = self.conv1(x)
-        x = self.brelu2(x, is_training)
-        x = self.conv2(x)
+        if self.filters <= 128:
+            x = self.brelu1(inputs, is_training)
+            x = self.conv1(x)
+            x = self.brelu2(x, is_training)
+            x = self.conv2(x)
+        else:
+            x = self.brelu1(inputs, is_training)
+            x = self.conv1(x)
+            x = self.brelu2(x, is_training)
+            x = self.conv2(x)
+            x = self.brelu3(x, is_training)
+            x = self.conv3(x)
         x = inputs + x
         return x
 
@@ -190,32 +213,49 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                                         stride=1)
         self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.9)
 
-        self.brelu11 = BatchNormRelu()
-        self.conv11 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
-        self.brelu12 = BatchNormRelu()
-        self.conv12 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
+        self.brelu_list = []
+        self.conv_list = []
 
-        self.brelu21 = BatchNormRelu()
-        self.conv21 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
-        self.brelu22 = BatchNormRelu()
-        self.conv22 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
-
-        self.brelu31 = BatchNormRelu()
-        self.conv31 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
-        self.brelu32 = BatchNormRelu()
-        self.conv32 = Conv2DFixedPadding(filters=filters,
-                                         kernel_size=3,
-                                         stride=1)
+        for i in range(3):
+            self.brelu_list.append([])
+            self.conv_list.append([])
+            if filters <= 128:
+                tmp_brelu = BatchNormRelu(name=name + '_brelu' + str(i + 1) + '_1')
+                tmp_conv = Conv2DFixedPadding(filters=filters,
+                                              kernel_size=3,
+                                              stride=1,
+                                              name=name + '_conv' + str(i + 1) + '_1')
+                self.brelu_list[-1].append(tmp_brelu)
+                self.conv_list[-1].append(tmp_conv)
+                tmp_brelu = BatchNormRelu(name=name + '_brelu' + str(i + 1) + '_2')
+                tmp_conv = Conv2DFixedPadding(filters=filters,
+                                              kernel_size=3,
+                                              stride=1,
+                                              name=name + '_conv' + str(i + 1) + '_2')
+                self.brelu_list[-1].append(tmp_brelu)
+                self.conv_list[-1].append(tmp_conv)
+            else:
+                tmp_brelu = BatchNormRelu(name=name + '_brelu' + str(i + 1) + '_1')
+                tmp_conv = Conv2DFixedPadding(filters=filters // 4,
+                                              kernel_size=1,
+                                              stride=1,
+                                              name=name + '_conv' + str(i + 1) + '_1')
+                self.brelu_list[-1].append(tmp_brelu)
+                self.conv_list[-1].append(tmp_conv)
+                tmp_brelu = BatchNormRelu(name=name + '_brelu' + str(i + 1) + '_3')
+                tmp_conv = Conv2DFixedPadding(filters=filters // 4,
+                                              kernel_size=3,
+                                              stride=1,
+                                              name=name + '_conv' + str(i + 1) + '_3')
+                self.brelu_list[-1].append(tmp_brelu)
+                self.conv_list[-1].append(tmp_conv)
+                tmp_brelu = BatchNormRelu(name=name + '_brelu' + str(i + 1) + '_3')
+                tmp_conv = Conv2DFixedPadding(filters=filters,
+                                              kernel_size=1,
+                                              stride=1,
+                                              name=name + '_conv' + str(i + 1) + '_3')
+                self.brelu_list[-1].append(tmp_brelu)
+                self.conv_list[-1].append(tmp_conv)
 
     def call(self, inputs, output_b, is_training):
         x = self.tconv1(inputs)
@@ -229,26 +269,14 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         cropped_b = output_b[:, start_pixel:end_pixel, start_pixel:end_pixel, :]
         """Assumes that data format is NHWC"""
         x = tf.concat([cropped_b, x], axis=-1)
-
         x = self.conv1(x)
 
-        y = self.brelu11(x, is_training)
-        y = self.conv11(y)
-        y = self.brelu12(y, is_training)
-        y = self.conv12(y)
-        x = x + y
-
-        y = self.brelu21(x, is_training)
-        y = self.conv21(y)
-        y = self.brelu22(y, is_training)
-        y = self.conv22(y)
-        x = x + y
-
-        y = self.brelu31(x, is_training)
-        y = self.conv31(y)
-        y = self.brelu32(y, is_training)
-        y = self.conv32(y)
-        x = x + y
+        for i in range(len(self.brelu_list)):
+            y = x
+            for j in range(len(self.brelu_list[i])):
+                y = self.brelu_list[i][j](y, is_training=is_training)
+                y = self.conv_list[i][j](y)
+            x = x + y
 
         x = self.bn1(x, training=is_training)
 
@@ -299,6 +327,7 @@ class ResNetPriorBlock(tf.keras.layers.Layer):
 
 @tf.function
 def prob_function(inputs):
+    # For sample method
     ts = inputs.get_shape()
     s = ts.as_list()
     s[3] = int(s[3] / 2)

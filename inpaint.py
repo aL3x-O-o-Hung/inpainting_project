@@ -12,6 +12,7 @@ from hpu_lap import HierarchicalProbUNet
 data_dir = "../data/CelebAMask-HQ"
 output_dir = '../output/naive_inpaint_v3/'
 rec_weight = 1.0
+deep_weight = 4.0
 
 
 # def my_model():
@@ -32,13 +33,13 @@ rec_weight = 1.0
 def my_model():
     model = HierarchicalProbUNet(
         num_layers=8,
-        num_filters=[64, 128, 256, 512, 512, 512, 512, 512],
+        num_filters=[64, 128, 256, 512, 1024, 1024, 1024, 1024],
         num_prior_layers=5,
         num_filters_prior=[80, 40, 20, 10, 5],
         # 4 x 4, 8 x 8, 16 x 16, 32 x 32
         rec=1.0 * rec_weight,
-        p=[0, 0, 0, 0.00002 * rec_weight, 0],
-        s=[0, 0, 0, 0.002 * rec_weight, 0],
+        p=[0, 0, 0, 0.00002 * deep_weight * rec_weight, 0],
+        s=[0, 0, 0, 0.002 * deep_weight * rec_weight, 0],
         tv=0,
         name='ProbUNet',
         use_resnet=True,
