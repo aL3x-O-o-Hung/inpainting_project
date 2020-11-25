@@ -113,9 +113,9 @@ class DownSampleBlock(tf.keras.layers.Layer):
         self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.9)
 
     def call(self, inputs, is_training):
-        output_b = self.bn1(inputs)
+        output_b = self.bn1(inputs, training=is_training)
         x = self.conv(inputs)
-        x = self.bn2(x)
+        x = self.bn2(x, training=is_training)
         return x, output_b
 
 
@@ -250,7 +250,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         y = self.conv32(y)
         x = x + y
 
-        x = self.bn1(x)
+        x = self.bn1(x, training=is_training)
 
         return x
 
@@ -262,7 +262,7 @@ class PriorBlock(tf.keras.layers.Layer):
         super(PriorBlock, self).__init__(name=name)
         self.conv = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
 
-    def call(self, inputs):
+    def call(self, inputs, is_training):
         x = 0.1 * self.conv(inputs)
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, :s // 2]
@@ -283,9 +283,9 @@ class ResNetPriorBlock(tf.keras.layers.Layer):
         self.bn1 = BatchNormRelu()
         self.conv2 = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
 
-    def call(self, inputs):
+    def call(self, inputs, is_training):
         x = self.conv1(inputs)
-        x = self.bn1(x)
+        x = self.bn1(x, is_training=is_training)
         x = 0.1 * self.conv2(x)
         s = x.get_shape().as_list()[3]
         mean = x[:, :, :, :s // 2]
@@ -341,7 +341,17 @@ class Encoder(tf.keras.layers.Layer):
             for i in range(num_layers):
                 if i == 0:
                     self.convs.append([])
-                    conv_temp = ConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
+                    conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
+                    self.convs[-1].append(conv_temp)
+                    conv_temp = tf.keras.layers.Conv2D(
+                        num_filters[i+1],
+                        kernel_size=3,
+                        strides=2,
+                        dilation_rate=1,
+                        padding='same',
+                        activation=None,
+                        name=name + '_down' + str(i + 1),
+                    )
                     self.convs[-1].append(conv_temp)
 
                 elif i < num_layers - 1:
@@ -350,7 +360,7 @@ class Encoder(tf.keras.layers.Layer):
                         conv_temp = ResNetConvBlock(filters=num_filters[i],
                                                     name=name + '_conv' + str(i + 1) + '_' + str(j + 1))
                         self.convs[-1].append(conv_temp)
-                    conv_temp = DownSampleBlock(filters=num_filters[i + 1])
+                    conv_temp = DownSampleBlock(filters=num_filters[i + 1], name=name + '_down' + str(i + 1))
                     self.convs[-1].append(conv_temp)
 
                 else:
@@ -376,7 +386,10 @@ class Encoder(tf.keras.layers.Layer):
             for i in range(len(self.convs)):
                 for j in range(len(self.convs[i]) - 1):
                     x = self.convs[i][j](x, is_training=is_training)
-                if i < len(self.convs) - 1:
+                if i == 0:
+                    x, b = x
+                    x = self.convs[i][-1](x)
+                elif i < len(self.convs) - 1:
                     x, b = self.convs[i][-1](x, is_training=is_training)
                 else:
                     b = x
@@ -410,7 +423,7 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         x = inputs
         prior = []
         for i in range(self.num_layers):
-            p = self.priors[i](x)
+            p = self.priors[i](x, is_training=is_training)
             prior.append(p)
             if i != self.num_layers - 1:
                 x = tf.concat([x, p], axis=-1)
@@ -441,7 +454,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
         x = inputs
         prior = []
         for i in range(self.num_layers):
-            p = self.priors[i](x)
+            p = self.priors[i](x, is_training=is_training)
             prior.append(p)
             s = p.get_shape().as_list()[3]
             posterior = tf.concat([
@@ -455,7 +468,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
 
     def sample(self, x, blocks, is_training=False):
         for i in range(self.num_layers):
-            p = self.priors[i](x)
+            p = self.priors[i](x, is_training=is_training)
             prob = prob_function(p)
             x = tf.concat([x, prob], axis=-1)
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
@@ -489,7 +502,10 @@ class Decoder(tf.keras.layers.Layer):
         self.tconvs = []
         self.generate = []
         for i in range(num_layers):
-            self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
+            if use_resnet:
+                self.tconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_without_prior'))
+            else:
+                self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
 
     def call(self, inputs, b, posterior_delta, is_training=True):
         x = inputs
