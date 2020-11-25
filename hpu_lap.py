@@ -192,30 +192,30 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
 
         self.brelu11 = BatchNormRelu()
         self.conv11 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
         self.brelu12 = BatchNormRelu()
         self.conv12 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
 
         self.brelu21 = BatchNormRelu()
         self.conv21 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
         self.brelu22 = BatchNormRelu()
         self.conv22 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
 
         self.brelu31 = BatchNormRelu()
         self.conv31 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
         self.brelu32 = BatchNormRelu()
         self.conv32 = Conv2DFixedPadding(filters=filters,
-                                        kernel_size=3,
-                                        stride=1)
+                                         kernel_size=3,
+                                         stride=1)
 
     def call(self, inputs, output_b, is_training):
         x = self.tconv1(inputs)
@@ -344,7 +344,7 @@ class Encoder(tf.keras.layers.Layer):
                     conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
                     self.convs[-1].append(conv_temp)
                     conv_temp = tf.keras.layers.Conv2D(
-                        num_filters[i+1],
+                        num_filters[i + 1],
                         kernel_size=3,
                         strides=2,
                         dilation_rate=1,
@@ -644,7 +644,7 @@ class HierarchicalProbUNet(tf.keras.Model):
                 loss += temp_loss
         temp_loss = 0.5 * (4 ** (l - 1)) * K.square(y_true - y_pred)
         temp_loss = weight * tf.reduce_mean(temp_loss)
-        self.add_metric(temp_loss, name='reconstruction loss' + str(l-1), aggregation='mean')
+        self.add_metric(temp_loss, name='reconstruction loss' + str(l - 1), aggregation='mean')
         loss += temp_loss
         return loss
 
@@ -731,10 +731,10 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.training_loss(ground_truth_x, x1, self.VGGs, self.rec, self.p, self.s, self.tv)
         for i in range(len(prior)):
             if i == 0:
-                los = residual_kl_gauss(posterior_delta[i], prior[i]) * (4**i)
+                los = residual_kl_gauss(posterior_delta[i], prior[i]) * (4 ** i)
                 self.add_metric(los, name='kl_gauss' + str(i), aggregation='mean')
             else:
-                temp = residual_kl_gauss(posterior_delta[i], prior[i]) * (4**i)
+                temp = residual_kl_gauss(posterior_delta[i], prior[i]) * (4 ** i)
                 self.add_metric(temp, name='kl_gauss' + str(i), aggregation='mean')
                 los = math_ops.add(los, temp)
         self.add_loss(loss + los)
