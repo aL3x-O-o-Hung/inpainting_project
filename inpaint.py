@@ -196,7 +196,7 @@ class CeleTrainDataset(torch.utils.data.Dataset):
         return self.len
 
 
-def train():
+def train(learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 30
@@ -204,7 +204,7 @@ def train():
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = my_model()
-        model.compile(optimizer=tf.keras.optimizers.Adam(0.01))
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
     train_dataset = CeleTrainDataset()
     data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=4)
@@ -227,7 +227,7 @@ def train():
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
-def continue_train(num):
+def continue_train(num, learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 100
@@ -238,7 +238,7 @@ def continue_train(num):
         inputs = tf.keras.Input(shape=(256, 256, 7,))
         model(inputs)
         model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
-        model.compile()
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
     train_dataset = CeleTrainDataset()
     data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=400, shuffle=True, num_workers=4)
@@ -320,16 +320,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str)
     parser.add_argument('--start_epoch', type=int, default=0)
+    parser.add_argument('--learning_rate', type=float, default=0.01)
     args = parser.parse_args()
 
     if args.mode == "train":
-        train()
+        train(args.learning_rate)
     elif args.mode == "eval":
         evaluation(args.start_epoch)
     elif args.mode == "reconstruct":
         reconstruct(args.start_epoch)
     elif args.mode == "continue_train":
-        continue_train(args.start_epoch)
+        continue_train(args.start_epoch, args.learning_rate)
     else:
         raise NotImplementedError
 
