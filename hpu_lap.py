@@ -271,7 +271,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         """Assumes that data format is NHWC"""
         x = tf.concat([cropped_b, x], axis=-1)
         x = self.conv1(x)
-        x = self.brelu1(x, training=is_training)
+        x = self.brelu1(x, is_training)
 
         for i in range(len(self.brelu_list)):
             y = x
@@ -280,7 +280,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                 y = self.conv_list[i][j](y)
             x = x + y
 
-        x = self.brelu2(x, training=is_training)
+        x = self.brelu2(x, is_training)
 
         return x
 
