@@ -231,6 +231,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                                         kernel_size=3,
                                         stride=1)
         self.brelu1 = BatchNormRelu()
+        self.brelu2 = BatchNormRelu()
 
         self.brelu_list = []
         self.conv_list = []
@@ -297,6 +298,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                 y = self.brelu_list[i][j](y, is_training=is_training)
                 y = self.conv_list[i][j](y)
             x = x + y
+        x = self.brelu2(x, is_training)
 
         return x
 
@@ -562,7 +564,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         :param name:
         """
         super(HierarchicalProbUNet, self).__init__(name=name)
-        self.use_resnet = use_resnet
         self.num_layers = num_layers
         self.num_filters = num_filters
         self.num_prior_layers = num_prior_layers
@@ -589,8 +590,6 @@ class HierarchicalProbUNet(tf.keras.Model):
                                                            name=name + '_decoder_post',
                                                            use_resnet=use_resnet)
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
-        if use_resnet:
-            self.final_brelu = BatchNormRelu(name=name + '_brelu_final')
         self.VGG = VGG16()
         for layer in self.VGG.layers:
             layer.trainable = False
@@ -732,8 +731,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2.reverse()
         posterior_delta = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
         x1, prior = self.decoder(x1, b_list1, posterior_delta, is_training=is_training)
-        if self.use_resnet:
-            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
@@ -761,8 +758,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list = b_list[0:-1]
         b_list.reverse()
         x1 = self.decoder.sample(x, b_list, is_training=is_training)
-        if self.use_resnet:
-            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         mask = inputs[:, :, :, 3:4]
         x1 = tf.keras.activations.sigmoid(x1)
@@ -791,8 +786,6 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2.reverse()
         posterior = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
         x1, prior = self.decoder(x1, b_list1, posterior, is_training=is_training)
-        if self.use_resnet:
-            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
