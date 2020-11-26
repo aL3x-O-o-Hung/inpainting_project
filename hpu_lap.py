@@ -96,27 +96,24 @@ class ConvBlock(tf.keras.layers.Layer):
         return x, output_b
 
 
-class DownSampleBlock(tf.keras.layers.Layer):
+class FirstConvBlock(tf.keras.layers.Layer):
     """Downsampling ConvBlock on Encoder side"""
 
     def __init__(self, filters, kernel_size=3, name=None):
-        super(DownSampleBlock, self).__init__(name=name)
-        self.conv = tf.keras.layers.Conv2D(
-            filters,
-            kernel_size=kernel_size,
-            strides=2,
-            dilation_rate=1,
-            padding='same',
-            activation=None,
-        )
+        super(FirstConvBlock, self).__init__(name=name)
+        self.conv1 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=kernel_size,
+                                        stride=1)
         self.brelu1 = BatchNormRelu()
-        self.brelu2 = BatchNormRelu()
+        self.conv2 = Conv2DFixedPadding(filters=filters,
+                                        kernel_size=kernel_size,
+                                        stride=1)
 
     def call(self, inputs, is_training):
-        output_b = self.brelu1(inputs, is_training)
-        x = self.conv(inputs)
-        x = self.brelu2(x, is_training)
-        return x, output_b
+        x = self.conv1(inputs)
+        x = self.brelu1(x, is_training)
+        x = self.conv2(x)
+        return x
 
 
 class ResNetConvBlock(tf.keras.layers.Layer):
@@ -163,6 +160,28 @@ class ResNetConvBlock(tf.keras.layers.Layer):
             x = self.conv3(x)
         x = inputs + x
         return x
+
+
+class DownSampleBlock(tf.keras.layers.Layer):
+    """Downsampling ConvBlock on Encoder side"""
+
+    def __init__(self, filters, kernel_size=3, name=None):
+        super(DownSampleBlock, self).__init__(name=name)
+        self.conv = tf.keras.layers.Conv2D(
+            filters,
+            kernel_size=kernel_size,
+            strides=2,
+            dilation_rate=1,
+            padding='same',
+            activation=None,
+        )
+        self.brelu = BatchNormRelu()
+
+    def call(self, inputs, is_training):
+        output_b = inputs
+        x = self.brelu(inputs, is_training)
+        x = self.conv(x)
+        return x, output_b
 
 
 class DeConvBlock(tf.keras.layers.Layer):
@@ -212,7 +231,6 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                                         kernel_size=3,
                                         stride=1)
         self.brelu1 = BatchNormRelu()
-        self.brelu2 = BatchNormRelu()
 
         self.brelu_list = []
         self.conv_list = []
@@ -270,8 +288,8 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         cropped_b = output_b[:, start_pixel:end_pixel, start_pixel:end_pixel, :]
         """Assumes that data format is NHWC"""
         x = tf.concat([cropped_b, x], axis=-1)
-        x = self.conv1(x)
         x = self.brelu1(x, is_training)
+        x = self.conv1(x)
 
         for i in range(len(self.brelu_list)):
             y = x
@@ -279,8 +297,6 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                 y = self.brelu_list[i][j](y, is_training=is_training)
                 y = self.conv_list[i][j](y)
             x = x + y
-
-        x = self.brelu2(x, is_training)
 
         return x
 
@@ -349,17 +365,9 @@ class Encoder(tf.keras.layers.Layer):
             for i in range(num_layers):
                 if i == 0:
                     self.convs.append([])
-                    conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
+                    conv_temp = FirstConvBlock(filters=num_filters[i], name=name + '_conv' + str(i + 1))
                     self.convs[-1].append(conv_temp)
-                    conv_temp = tf.keras.layers.Conv2D(
-                        num_filters[i + 1],
-                        kernel_size=3,
-                        strides=2,
-                        dilation_rate=1,
-                        padding='same',
-                        activation=None,
-                        name=name + '_down' + str(i + 1),
-                    )
+                    conv_temp = DownSampleBlock(filters=num_filters[i + 1], name=name + '_down' + str(i + 1))
                     self.convs[-1].append(conv_temp)
 
                 elif i < num_layers - 1:
@@ -394,10 +402,7 @@ class Encoder(tf.keras.layers.Layer):
             for i in range(len(self.convs)):
                 for j in range(len(self.convs[i]) - 1):
                     x = self.convs[i][j](x, is_training=is_training)
-                if i == 0:
-                    x, b = x
-                    x = self.convs[i][-1](x)
-                elif i < len(self.convs) - 1:
+                if i < len(self.convs) - 1:
                     x, b = self.convs[i][-1](x, is_training=is_training)
                 else:
                     b = x
@@ -557,6 +562,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         :param name:
         """
         super(HierarchicalProbUNet, self).__init__(name=name)
+        self.use_resnet = use_resnet
         self.num_layers = num_layers
         self.num_filters = num_filters
         self.num_prior_layers = num_prior_layers
@@ -583,6 +589,8 @@ class HierarchicalProbUNet(tf.keras.Model):
                                                            name=name + '_decoder_post',
                                                            use_resnet=use_resnet)
         self.conv = Conv2DFixedPadding(filters=3, kernel_size=1, stride=1, name=name + '_conv_final')
+        if use_resnet:
+            self.final_brelu = BatchNormRelu(name=name + '_brelu_final')
         self.VGG = VGG16()
         for layer in self.VGG.layers:
             layer.trainable = False
@@ -724,6 +732,8 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2.reverse()
         posterior_delta = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
         x1, prior = self.decoder(x1, b_list1, posterior_delta, is_training=is_training)
+        if self.use_resnet:
+            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
@@ -751,6 +761,8 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list = b_list[0:-1]
         b_list.reverse()
         x1 = self.decoder.sample(x, b_list, is_training=is_training)
+        if self.use_resnet:
+            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         mask = inputs[:, :, :, 3:4]
         x1 = tf.keras.activations.sigmoid(x1)
@@ -779,6 +791,8 @@ class HierarchicalProbUNet(tf.keras.Model):
         b_list2.reverse()
         posterior = self.decoder_post(x2, b_list2[0:self.num_prior_layers], is_training=is_training)
         x1, prior = self.decoder(x1, b_list1, posterior, is_training=is_training)
+        if self.use_resnet:
+            x1 = self.final_brelu(x1, is_training)
         x1 = self.conv(x1)
         x1 = tf.keras.activations.sigmoid(x1)
         x1 = x1 * mask + original_input_x * (1 - mask)
