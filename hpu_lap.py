@@ -184,6 +184,19 @@ class DownSampleBlock(tf.keras.layers.Layer):
         return x, output_b
 
 
+class FakeDownSampleBlock(tf.keras.layers.Layer):
+    """Downsampling ConvBlock on Encoder side"""
+
+    def __init__(self, filters, kernel_size=3, name=None):
+        super(FakeDownSampleBlock, self).__init__(name=name)
+        self.brelu = BatchNormRelu()
+
+    def call(self, inputs, is_training):
+        output_b = inputs
+        x = self.brelu(inputs, is_training)
+        return x, output_b
+
+
 class DeConvBlock(tf.keras.layers.Layer):
     """Upsampling DeConvBlock on Decoder side"""
 
@@ -388,6 +401,8 @@ class Encoder(tf.keras.layers.Layer):
                         conv_temp = ResNetConvBlock(filters=num_filters[i],
                                                     name=name + '_conv' + str(i + 1) + '_' + str(j + 1))
                         self.convs[-1].append(conv_temp)
+                    conv_temp = FakeDownSampleBlock(filters=num_filters[i], name=name + '_down' + str(i + 1))
+                    self.convs[-1].append(conv_temp)
 
         else:
             self.convs = []
@@ -405,10 +420,7 @@ class Encoder(tf.keras.layers.Layer):
             for i in range(len(self.convs)):
                 for j in range(len(self.convs[i]) - 1):
                     x = self.convs[i][j](x, is_training=is_training)
-                if i < len(self.convs) - 1:
-                    x, b = self.convs[i][-1](x, is_training=is_training)
-                else:
-                    b = x
+                x, b = self.convs[i][-1](x, is_training=is_training)
                 list_b.append(b)
         else:
             for i in range(len(self.convs)):
