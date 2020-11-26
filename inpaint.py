@@ -204,7 +204,7 @@ def train(my_model_func, learning_rate=0.01):
         for c, x in enumerate(data_loader):
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
-            model.fit(x, x, epochs=1, batch_size=16)
+            model.fit(x, x, epochs=1, batch_size=8)
             del x
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
@@ -239,7 +239,7 @@ def continue_train(my_model_func, num, learning_rate=0.01):
         for c, x in enumerate(data_loader):
             print("epoch", epoch, ",", c, "/", 27000//400)
             x = x.numpy()
-            model.fit(x, x, epochs=1, batch_size=16)
+            model.fit(x, x, epochs=1, batch_size=8)
             del x
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
