@@ -302,29 +302,6 @@ class PriorBlock(tf.keras.layers.Layer):
         return tf.concat([mean, std], axis=-1)
 
 
-class ResNetPriorBlock(tf.keras.layers.Layer):
-    """calculating Prior Block"""
-
-    def __init__(self, filters, name=None):  # filters: number of the layers incorporated into the decoder
-        super(ResNetPriorBlock, self).__init__(name=name)
-        self.conv1 = Conv2DFixedPadding(filters=filters * 8, kernel_size=1, stride=1)
-        self.bn1 = BatchNormRelu()
-        self.conv2 = Conv2DFixedPadding(filters=filters * 2, kernel_size=1, stride=1)
-
-    def call(self, inputs, is_training):
-        x = self.conv1(inputs)
-        x = self.bn1(x, is_training=is_training)
-        x = 0.1 * self.conv2(x)
-        s = x.get_shape().as_list()[3]
-        mean = x[:, :, :, :s // 2]
-        # mean =tf.keras.activations.tanh(mean)
-        logstd = x[:, :, :, s // 2:]
-        logstd = 3.0 * tf.keras.activations.tanh(logstd)
-        std = K.exp(logstd)
-        # var = K.abs(logvar)
-        return tf.concat([mean, std], axis=-1)
-
-
 @tf.function
 def prob_function(inputs):
     # For sample method
@@ -443,10 +420,9 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
         for i in range(num_layers):
             if use_resnet:
                 self.deconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-                self.priors.append(ResNetPriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
             else:
                 self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-                self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
+            self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
 
     def call(self, inputs, blocks, is_training):
         x = inputs
@@ -474,10 +450,9 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
         for i in range(num_layers):
             if use_resnet:
                 self.deconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-                self.priors.append(ResNetPriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
             else:
                 self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
-                self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
+            self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
 
     def call(self, inputs, blocks, posterior_delta, is_training):
         x = inputs
@@ -532,9 +507,9 @@ class Decoder(tf.keras.layers.Layer):
         self.generate = []
         for i in range(num_layers):
             if use_resnet:
-                self.tconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_without_prior'))
+                self.tconvs.append(ResNetDeConvBlock(num_filters[i], name=name + '_without_prior' + str(i)))
             else:
-                self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
+                self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior' + str(i)))
 
     def call(self, inputs, b, posterior_delta, is_training):
         x = inputs
@@ -731,7 +706,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.total_loss(y_true, y_pred, VGG_model, rec, p, s, tv)
         return loss
 
-    def call(self, inputs, is_training=False):
+    def call(self, inputs, is_training=True):
         x1 = inputs[:, :, :, 0:3]
         x2 = inputs[:, :, :, 4:7]
         original_input_x = x1
