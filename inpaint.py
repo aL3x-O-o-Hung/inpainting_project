@@ -133,7 +133,7 @@ def get_faces(ind):
     return m1, mask
 
 
-def load_data_celeb(lis, t='train'):
+def load_data_celeb(lis, t='train', lim=1):
     x = []
     if t == 'train':
         lb = 0
@@ -142,7 +142,7 @@ def load_data_celeb(lis, t='train'):
     else:
         lb = 27000
         hb = 30000
-        lim = 1
+        lim = lim
     for i in range(lim):
         ind = np.random.randint(lb, hb)
         if len(lis) == 0:
@@ -178,14 +178,14 @@ class CeleTrainDataset(torch.utils.data.Dataset):
         return self.len
 
 
-def train(my_model, learning_rate=0.01):
+def train(my_model_func, learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 30
     out = output_dir
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = my_model()
+        model = my_model_func()
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
     train_dataset = CeleTrainDataset()
@@ -209,16 +209,16 @@ def train(my_model, learning_rate=0.01):
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
-def continue_train(my_model, num, learning_rate=0.01):
+def continue_train(my_model_func, num, learning_rate=0.01):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     epochs = 100
     out = output_dir
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = my_model()
+        model = my_model_func()
         inputs = tf.keras.Input(shape=(256, 256, 7,))
-        model(inputs)
+        model(inputs, is_training=True)
         model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
@@ -244,14 +244,14 @@ def continue_train(my_model, num, learning_rate=0.01):
         model.save_weights(out + str(epoch) + '.h5', save_format='h5')
 
 
-def evaluation(my_model, num):
+def evaluation(my_model_func, num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     out = output_dir
     # hpu hpu_temp
-    model = my_model()
+    model = my_model_func()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
-    model(inputs)
+    model(inputs, is_training=False)
     model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):
@@ -271,14 +271,14 @@ def evaluation(my_model, num):
         plt.show()
 
 
-def reconstruct(my_model, num):
+def reconstruct(my_model_func, num):
     print(tf.test.is_gpu_available())
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
     out = output_dir
     # hpu hpu_temp
-    model = my_model()
+    model = my_model_func()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
-    model(inputs)
+    model(inputs, is_training=False)
     model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):

@@ -408,7 +408,7 @@ class Encoder(tf.keras.layers.Layer):
                     conv_temp = ConvBlock(filters=num_filters[i], do_max_pool=False, name=name + '_conv' + str(i + 1))
                 self.convs.append(conv_temp)
 
-    def call(self, inputs, is_training=True):
+    def call(self, inputs, is_training):
         list_b = []
         x = inputs
         if self.use_resnet:
@@ -448,7 +448,7 @@ class DecoderWithPriorBlockPosterior(tf.keras.layers.Layer):
                 self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
                 self.priors.append(PriorBlock(num_filters_prior[i], name=name + 'prior' + str(i)))
 
-    def call(self, inputs, blocks, is_training=True):
+    def call(self, inputs, blocks, is_training):
         x = inputs
         prior = []
         for i in range(self.num_layers):
@@ -479,7 +479,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
                 self.deconvs.append(DeConvBlock(num_filters[i], name=name + '_dconv' + str(i)))
                 self.priors.append(PriorBlock(num_filters_prior[i], name=name + '_prior' + str(i)))
 
-    def call(self, inputs, blocks, posterior_delta, is_training=True):
+    def call(self, inputs, blocks, posterior_delta, is_training):
         x = inputs
         prior = []
         for i in range(self.num_layers):
@@ -495,7 +495,7 @@ class DecoderWithPriorBlock(tf.keras.layers.Layer):
             x = self.deconvs[i](x, blocks[i], is_training=is_training)
         return x, prior
 
-    def sample(self, x, blocks, is_training=False):
+    def sample(self, x, blocks, is_training):
         for i in range(self.num_layers):
             p = self.priors[i](x, is_training=is_training)
             prob = prob_function(p)
@@ -536,14 +536,14 @@ class Decoder(tf.keras.layers.Layer):
             else:
                 self.tconvs.append(DeConvBlock(num_filters[i], name=name + '_without_prior'))
 
-    def call(self, inputs, b, posterior_delta, is_training=True):
+    def call(self, inputs, b, posterior_delta, is_training):
         x = inputs
         x, prior = self.prior_decode(x, b[0:self.num_prior_layers], posterior_delta, is_training=is_training)
         for i in range(self.num_layers):
             x = self.tconvs[i](x, b[self.num_prior_layers + i], is_training=is_training)
         return x, prior
 
-    def sample(self, x, b, is_training=False):
+    def sample(self, x, b, is_training):
         x = self.prior_decode.sample(x, b[0:self.num_prior_layers], is_training=is_training)
         for i in range(self.num_layers):
             x = self.tconvs[i](x, b[self.num_prior_layers + i], is_training=is_training)
@@ -731,7 +731,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.total_loss(y_true, y_pred, VGG_model, rec, p, s, tv)
         return loss
 
-    def call(self, inputs, is_training=True):
+    def call(self, inputs, is_training):
         x1 = inputs[:, :, :, 0:3]
         x2 = inputs[:, :, :, 4:7]
         original_input_x = x1
@@ -769,7 +769,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         self.add_loss(loss + los)
         return x1
 
-    def sample(self, inputs, is_training=False):
+    def sample(self, inputs, is_training):
         x, b_list = self.encoder(inputs, is_training=is_training)
         b_list = b_list[0:-1]
         b_list.reverse()
@@ -786,7 +786,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         # x1 = self.build_from_pyramid(inp_, res_, masks)
         return x1
 
-    def reconstruct(self, inputs, is_training=False):
+    def reconstruct(self, inputs, is_training):
         x1 = inputs[:, :, :, 0:3]
         x2 = inputs[:, :, :, 4:7]
         original_input_x = x1
