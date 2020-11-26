@@ -38,7 +38,7 @@ class Conv2DTranspose(tf.keras.layers.Layer):
             kernel_size=kernel_size,
             strides=2,
             padding='same',
-            activation=tf.keras.activations.swish,
+            activation=None,
             dtype=dtype
         )
 
@@ -52,15 +52,15 @@ class Conv2DFixedPadding(tf.keras.layers.Layer):
 
     def __init__(self, filters, kernel_size, stride, name=None, dtype=None):
         super(Conv2DFixedPadding, self).__init__(name=name)
-        self.conv1 = tf.keras.layers.Conv2D(filters,
-                                            kernel_size,
-                                            strides=1,
-                                            dilation_rate=1,
-                                            padding=('same' if stride == 1 else 'valid'),
-                                            activation=None,
-                                            dtype=dtype
-                                            # kernel_initializer=tf.keras.initializers.ones
-                                            )
+        self.conv1 = tf.keras.layers.Conv2D(
+            filters,
+            kernel_size,
+            strides=1,
+            dilation_rate=1,
+            padding=('same' if stride == 1 else 'valid'),
+            activation=None,
+            dtype=dtype
+        )
 
     def call(self, inputs):
         x = self.conv1(inputs)
