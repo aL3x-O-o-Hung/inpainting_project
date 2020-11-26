@@ -20,7 +20,7 @@ class BatchNormRelu(tf.keras.layers.Layer):
 
     def __init__(self, name=None, dtype=None):
         super(BatchNormRelu, self).__init__(name=name)
-        self.bnorm = tf.keras.layers.BatchNormalization(momentum=0.9, dtype=dtype)
+        self.bnorm = tf.keras.layers.experimental.SyncBatchNormalization(momentum=0.9, dtype=dtype)
 
     def call(self, inputs, is_training):
         x = self.bnorm(inputs, training=is_training)
@@ -109,13 +109,13 @@ class DownSampleBlock(tf.keras.layers.Layer):
             padding='same',
             activation=None,
         )
-        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.9)
-        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.9)
+        self.brelu1 = BatchNormRelu()
+        self.brelu2 = BatchNormRelu()
 
     def call(self, inputs, is_training):
-        output_b = self.bn1(inputs, training=is_training)
+        output_b = self.brelu1(inputs, is_training)
         x = self.conv(inputs)
-        x = self.bn2(x, training=is_training)
+        x = self.brelu2(x, is_training)
         return x, output_b
 
 
@@ -211,7 +211,8 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         self.conv1 = Conv2DFixedPadding(filters=filters,
                                         kernel_size=3,
                                         stride=1)
-        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.9)
+        self.brelu1 = BatchNormRelu()
+        self.brelu2 = BatchNormRelu()
 
         self.brelu_list = []
         self.conv_list = []
@@ -270,6 +271,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
         """Assumes that data format is NHWC"""
         x = tf.concat([cropped_b, x], axis=-1)
         x = self.conv1(x)
+        x = self.brelu1(x, training=is_training)
 
         for i in range(len(self.brelu_list)):
             y = x
@@ -278,7 +280,7 @@ class ResNetDeConvBlock(tf.keras.layers.Layer):
                 y = self.conv_list[i][j](y)
             x = x + y
 
-        x = self.bn1(x, training=is_training)
+        x = self.brelu2(x, training=is_training)
 
         return x
 
