@@ -202,6 +202,7 @@ class DeConvBlock(tf.keras.layers.Layer):
 
     def call(self, inputs, output_b, is_training):
         x = self.tconv1(inputs)
+        x = tf.keras.activations.swish(x)
 
         """Cropping is only used when convolution padding is 'valid'"""
         src_shape = output_b.shape[1]
