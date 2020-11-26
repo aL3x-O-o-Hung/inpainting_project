@@ -302,7 +302,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str)
     parser.add_argument('--start_epoch', type=int, default=0)
-    parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--rec_weight', type=float, default=1.0)
     parser.add_argument('--deep_weight', type=float, default=4.0)
     args = parser.parse_args()
