@@ -218,7 +218,7 @@ def continue_train(my_model_func, num, learning_rate=0.01):
     with strategy.scope():
         model = my_model_func()
         inputs = tf.keras.Input(shape=(256, 256, 7,))
-        model(inputs, is_training=True)
+        model(inputs)
         model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate))
 
@@ -251,7 +251,7 @@ def evaluation(my_model_func, num):
     # hpu hpu_temp
     model = my_model_func()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
-    model(inputs, is_training=False)
+    model(inputs)
     model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):
@@ -278,7 +278,7 @@ def reconstruct(my_model_func, num):
     # hpu hpu_temp
     model = my_model_func()
     inputs = tf.keras.Input(shape=(256, 256, 7,))
-    model(inputs, is_training=False)
+    model(inputs)
     model.load_weights(out + str(num) + '.h5', by_name=True)
     lis = []
     for i in range(27000, 30000):

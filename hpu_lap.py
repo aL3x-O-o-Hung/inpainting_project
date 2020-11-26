@@ -731,7 +731,7 @@ class HierarchicalProbUNet(tf.keras.Model):
         loss = self.total_loss(y_true, y_pred, VGG_model, rec, p, s, tv)
         return loss
 
-    def call(self, inputs, is_training=True):
+    def call(self, inputs, is_training=False):
         x1 = inputs[:, :, :, 0:3]
         x2 = inputs[:, :, :, 4:7]
         original_input_x = x1
