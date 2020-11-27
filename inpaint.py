@@ -12,6 +12,7 @@ from hpu_lap import HierarchicalProbUNet
 data_dir = "../data/CelebAMask-HQ"
 output_dir = '../output/naive_inpaint_v3/'
 
+# 8, 15
 
 # def my_model():
 #     model = HierarchicalProbUNet(
