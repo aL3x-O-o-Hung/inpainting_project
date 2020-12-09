@@ -1,16 +1,18 @@
 import argparse
+import gc
 import os
 
 import cv2
-import gc
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import torch
+
 from hpu_lap import HierarchicalProbUNet
 
 data_dir = "../data/CelebAMask-HQ"
 output_dir = '../output/naive_inpaint_v3/'
+
 
 # 8, 15
 
@@ -134,7 +136,7 @@ def get_faces(ind):
     return m1, mask
 
 
-def load_data_celeb(lis, t='train', lim=1):
+def load_data_celeb(lis, t='train', lim=1, select_id=0):
     x = []
     if t == 'train':
         lb = 0
@@ -145,7 +147,10 @@ def load_data_celeb(lis, t='train', lim=1):
         hb = 30000
         lim = lim
     for i in range(lim):
-        ind = np.random.randint(lb, hb)
+        if t == 'valid':
+            ind = lb + select_id
+        else:
+            ind = np.random.randint(lb, hb)
         if len(lis) == 0:
             break
         else:
@@ -203,7 +208,7 @@ def train(my_model_func, learning_rate=0.01):
         tf.keras.backend.clear_session()
         gc.collect()
         for c, x in enumerate(data_loader):
-            print("epoch", epoch, ",", c, "/", 27000//400)
+            print("epoch", epoch, ",", c, "/", 27000 // 400)
             x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=8)
             del x
@@ -238,7 +243,7 @@ def continue_train(my_model_func, num, learning_rate=0.01):
         tf.keras.backend.clear_session()
         gc.collect()
         for c, x in enumerate(data_loader):
-            print("epoch", epoch, ",", c, "/", 27000//400)
+            print("epoch", epoch, ",", c, "/", 27000 // 400)
             x = x.numpy()
             model.fit(x, x, epochs=1, batch_size=8)
             del x
@@ -257,8 +262,8 @@ def evaluation(my_model_func, num):
     lis = []
     for i in range(27000, 30000):
         lis.append(i)
-    while len(lis) != 0:
-        x = load_data_celeb(lis, 'valid')
+    for select_id in range(30000 - 27000):
+        x = load_data_celeb(lis, 'valid', select_id=select_id)
 
         plt.figure(figsize=(15 * 4, 15 * 2))
         plt.subplot(4, 2, 1)
@@ -284,8 +289,8 @@ def reconstruct(my_model_func, num):
     lis = []
     for i in range(27000, 30000):
         lis.append(i)
-    while len(lis) != 0:
-        x = load_data_celeb(lis, 'valid')
+    for select_id in range(30000 - 27000):
+        x = load_data_celeb(lis, 'valid', select_id=select_id)
 
         plt.figure(figsize=(15 * 4, 15 * 2))
         plt.subplot(4, 2, 1)
@@ -299,6 +304,58 @@ def reconstruct(my_model_func, num):
         plt.show()
 
 
+def get_result(my_model_func, num, num_images_per_row):
+    print(tf.test.is_gpu_available())
+    print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
+    out = output_dir
+    # hpu hpu_temp
+    model = my_model_func()
+    inputs = tf.keras.Input(shape=(256, 256, 7,))
+    model(inputs)
+    model.load_weights(out + str(num) + '.h5', by_name=True, skip_mismatch=True)
+    lis = []
+    for i in range(27000, 30000):
+        lis.append(i)
+    out = np.ones((5, 256 * num_images_per_row + 5 * (num_images_per_row - 1), 3)) * 255
+    while len(lis) != 0:
+        x = load_data_celeb(lis, 'valid')
+        for j in range(x.shape[0]):
+            plt.subplot(1, num_images_per_row, 1)
+            plt.imshow(x[j, :, :, 0:3])
+            plt.subplot(1, num_images_per_row, 2)
+            plt.imshow(x[j, :, :, 4:7])
+            t = []
+            for i in range(num_images_per_row - 3):
+                y = model.sample(x[j:j + 1, :, :, 0:4], is_training=False)
+                plt.subplot(1, 5, i + 3)
+                plt.imshow(y[j, :, :, :])
+                t.append(y[j, :, :, :])
+            rec = model.reconstruct(x[j:j + 1, :, :, 0:7], is_training=False)
+            plt.subplot(1, num_images_per_row, num_images_per_row)
+            plt.imshow(rec[j, :, :, :])
+            plt.show()
+            marker = str(input('marker:'))
+            if marker == 'y':
+                temp = x[j, :, :, 0:3]
+                o = np.ones((x.shape[1], 5, 3))
+                temp = np.concatenate((temp, o), axis=1)
+                for i in range(num_images_per_row - 3):
+                    temp = np.concatenate((temp, t[i]), axis=1)
+                    temp = np.concatenate((temp, o), axis=1)
+                temp = np.concatenate((temp, rec[j, :, :, :]), axis=1)
+                temp = np.concatenate((temp, o), axis=1)
+                temp = np.concatenate((temp, x[j, :, :, 4:7]), axis=1)
+                out = np.concatenate((out, temp), axis=0)
+                o = np.ones((5, 256 * num_images_per_row + 5 * (num_images_per_row - 1), 3))
+                out = np.concatenate((out, o), axis=0)
+            elif marker == 'end':
+                cv2.imwrite('res_.png', out * 255)
+                im = cv2.imread('res_.png')
+                im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                cv2.imwrite('res_.png', im)
+                out = np.ones((5, 256 * num_images_per_row + 5 * (num_images_per_row - 1), 3)) * 255
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str)
@@ -310,15 +367,16 @@ if __name__ == "__main__":
 
     gpus = tf.config.experimental.list_physical_devices('GPU')
     if gpus:
-      try:
-        # Currently, memory growth needs to be the same across GPUs
-        for gpu in gpus:
-          tf.config.experimental.set_memory_growth(gpu, True)
-        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-      except RuntimeError as e:
-        # Memory growth must be set before GPUs have been initialized
-        print(e)
+        try:
+            # Currently, memory growth needs to be the same across GPUs
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            # Memory growth must be set before GPUs have been initialized
+            print(e)
+
 
     def my_model():
         model = HierarchicalProbUNet(
@@ -336,6 +394,7 @@ if __name__ == "__main__":
         )
         return model
 
+
     if args.mode == "train":
         train(my_model, args.learning_rate)
     elif args.mode == "eval":
@@ -344,5 +403,7 @@ if __name__ == "__main__":
         reconstruct(my_model, args.start_epoch)
     elif args.mode == "continue_train":
         continue_train(my_model, args.start_epoch, args.learning_rate)
+    elif args.mode == "get_result":
+        get_result(my_model, args.start_epoch, num_images_per_row=6)
     else:
         raise NotImplementedError
